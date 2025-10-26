@@ -45,9 +45,10 @@ class WhoamiPage extends StatelessWidget {
       ),
       body: BlocConsumer<AuthCubit, AuthState>(
         listener: (context, state) {
-          // اگر کاربر از حالت موفقیت خارج شد (مثلاً logout)، به صفحه‌ی لاگین برگردان
           if (state is AuthInitial) {
-            context.go(AppRoutes.login);
+            if (context.mounted) {
+              context.go(AppRoutes.login); // <<<--- تضمین هدایت به Login
+            }
           }
         },
         builder: (context, state) {

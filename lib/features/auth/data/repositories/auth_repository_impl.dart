@@ -6,10 +6,14 @@ import 'package:lms/features/auth/data/datasources/auth_remote_data_source.dart'
 import 'package:lms/features/auth/domain/entities/user.dart';
 import 'package:lms/features/auth/domain/repositories/auth_repository.dart';
 
+import '../../../../api_client.dart';
+
 class AuthRepositoryImpl implements AuthRepository {
   final AuthRemoteDataSource remoteDataSource;
 
-  AuthRepositoryImpl({required this.remoteDataSource});
+  AuthRepositoryImpl({required this.remoteDataSource, required this.apiClient});
+
+  final ApiClient apiClient;
 
   @override
   Future<Either<Failure, bool>> requestAuth(String userIdentifier) async {
@@ -39,5 +43,15 @@ class AuthRepositoryImpl implements AuthRepository {
     } on Failure catch (e) {
       return Left(e);
     }
+  }
+
+  @override
+  Future<void> logout() async {
+    // 1. پاک کردن Access Token از Secure Storage
+    await apiClient
+        .deleteToken(); // از ApiClient متد حذف توکن را فراخوانی می‌کند
+
+    // 2. پاک کردن کوکی‌ها (شامل uck_ses) از CookieJar
+    await apiClient.clearCookies(); // <<<--- اضافه شده
   }
 }

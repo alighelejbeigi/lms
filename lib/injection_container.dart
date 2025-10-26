@@ -30,7 +30,7 @@ void init() {
 
   // Domain layer (Repository)
   sl.registerLazySingleton<AuthRepository>(
-    () => AuthRepositoryImpl(remoteDataSource: sl()),
+    () => AuthRepositoryImpl(remoteDataSource: sl(), apiClient: sl()),
   );
 
   // Data layer (Data Sources)

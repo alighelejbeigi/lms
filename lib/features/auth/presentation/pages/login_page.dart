@@ -2,8 +2,12 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lms/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:lms/features/auth/presentation/cubit/auth_state.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../../../routes/app_router.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -14,6 +18,7 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final TextEditingController _inputController = TextEditingController();
+  final String _forgotPasswordUrl = "https://your-forget-password-url.com";
 
   @override
   void dispose() {
@@ -30,8 +35,14 @@ class _LoginPageState extends State<LoginPage> {
     return BlocConsumer<AuthCubit, AuthState>(
       listener: (context, state) {
         if (state is AuthSuccess) {
-          // در صورت موفقیت، GoRouter کاربر را به WhoamiPage هدایت می‌کند.
-          // این listener فقط برای اطلاع‌رسانی است.
+          // ورود موفق: هدایت به Whoami
+          context.go(AppRoutes.whoami);
+        }
+        if (state is AuthInitial) {
+          // خروج موفق یا وضعیت اولیه: مطمئن شوید که در صفحه‌ی Login هستیم
+          // این خط ضروری نیست زیرا GoRouter redirect را مدیریت می‌کند،
+          // اما برای اطمینان از پاک بودن URL خوب است.
+          context.go(AppRoutes.login);
         }
       },
       builder: (context, state) {
@@ -137,6 +148,35 @@ class _LoginPageState extends State<LoginPage> {
                     child: Text(buttonText),
                   ),
                 ),
+                if (currentStep == AuthStep.password)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16.0),
+                    child: InkWell(
+                      onTap: () async {
+                        final uri = Uri.parse(_forgotPasswordUrl);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(
+                            uri,
+                            mode: LaunchMode.externalApplication,
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('لینک قابل باز شدن نیست.'),
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text(
+                        'فراموشی رمز ورود',
+                        style: TextStyle(
+                          color: Colors.blue,
+                          decoration: TextDecoration.underline,
+                        ),
+                        textDirection: TextDirection.rtl,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),

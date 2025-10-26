@@ -59,4 +59,8 @@ class ApiClient {
   Future<void> deleteToken() async {
     await _storage.delete(key: _TOKEN_KEY);
   }
+
+  Future<void> clearCookies() async {
+    await _cookieJar.deleteAll(); // <<<--- اضافه شده
+  }
 }

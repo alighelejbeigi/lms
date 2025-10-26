@@ -7,8 +7,6 @@ import 'package:lms/features/auth/domain/usecases/request_auth.dart';
 import 'package:lms/features/auth/domain/usecases/verify_auth.dart';
 import 'package:lms/features/auth/presentation/cubit/auth_state.dart';
 
-import '../../../../routes/app_router.dart';
-
 class AuthCubit extends Cubit<AuthState> {
   final RequestAuth requestAuthUseCase;
   final VerifyAuth verifyAuthUseCase;
@@ -73,10 +71,8 @@ class AuthCubit extends Cubit<AuthState> {
 
   // متد خروج از حساب
   Future<void> logout() async {
-    await authRepository
-        .getCurrentUser(); // این متد باید در Repository پیاده‌سازی شود
-    emit(const AuthInitial());
-    AppRoutes.login;
+    await authRepository.logout(); // پاکسازی کامل داده‌ها (توکن + کوکی)
+    emit(const AuthInitial()); // بازگشت به وضعیت اولیه برای هدایت UI
   }
 
   String _mapFailureToMessage(Failure failure) {
