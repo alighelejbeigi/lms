@@ -43,7 +43,5 @@ void init() {
     () => const FlutterSecureStorage(),
   );
   sl.registerLazySingleton<ApiClient>(() => ApiClient.instance);
-  sl.registerLazySingleton<Dio>(
-    () => ApiClient.instance.dio,
-  ); // دسترسی مستقیم به Dio
+  sl.registerLazySingleton<Dio>(() => ApiClient.instance.dio);
 }

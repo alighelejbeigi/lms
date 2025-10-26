@@ -21,10 +21,7 @@ class MyApp extends StatelessWidget {
     // استفاده از BlocProvider برای در دسترس قرار دادن AuthCubit
     return BlocProvider(
       // استفاده از sl<AuthCubit>() برای گرفتن AuthCubit تزریق شده
-      create:
-          (context) =>
-              GetIt.instance.get<AuthCubit>()
-                ..checkAuthStatus(), // <<<--- تغییر یافته
+      create: (context) => GetIt.instance.get<AuthCubit>()..checkAuthStatus(),
       child: MaterialApp.router(
         title: 'LMS',
         theme: ThemeData(
