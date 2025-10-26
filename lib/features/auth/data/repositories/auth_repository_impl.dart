@@ -54,4 +54,14 @@ class AuthRepositoryImpl implements AuthRepository {
     // 2. پاک کردن کوکی‌ها (شامل uck_ses) از CookieJar
     await apiClient.clearCookies(); // <<<--- اضافه شده
   }
+
+  @override
+  Future<Either<Failure, bool>> registerFace(String imagePath) async {
+    try {
+      final result = await remoteDataSource.registerFace(imagePath);
+      return Right(result);
+    } on Failure catch (e) {
+      return Left(e);
+    }
+  }
 }

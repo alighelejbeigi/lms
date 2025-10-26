@@ -14,6 +14,7 @@ abstract class AuthState extends Equatable {
 // وضعیت اولیه یا پس از خروج
 class AuthInitial extends AuthState {
   final String message;
+
   const AuthInitial({
     this.message = 'لطفاً نام کاربری، کد ملی یا شماره موبایل خود را وارد کنید.',
   });
@@ -25,6 +26,7 @@ class AuthInitial extends AuthState {
 // در حال بارگذاری
 class AuthLoading extends AuthState {
   final AuthStep step;
+
   const AuthLoading({required this.step});
 
   @override
@@ -34,6 +36,7 @@ class AuthLoading extends AuthState {
 // مرحله اول موفقیت‌آمیز بود، به مرحله رمز عبور بروید
 class AuthRequestSuccess extends AuthState {
   final String message;
+
   const AuthRequestSuccess({required this.message});
 
   @override
@@ -43,6 +46,7 @@ class AuthRequestSuccess extends AuthState {
 // احراز هویت کامل شد و کاربر وارد شد
 class AuthSuccess extends AuthState {
   final UserEntity user;
+
   const AuthSuccess({required this.user});
 
   @override
@@ -53,27 +57,32 @@ class AuthSuccess extends AuthState {
 class AuthError extends AuthState {
   final String message;
   final AuthStep step;
+
   const AuthError({required this.message, required this.step});
 
   @override
   List<Object> get props => [message, step];
 }
 
-class FaceVerificationLoading extends AuthState {
-  const FaceVerificationLoading();
+class FaceProcessingLoading extends AuthState {
+  // تغییر نام از FaceVerificationLoading
+  const FaceProcessingLoading();
 }
 
-class FaceVerificationSuccess extends AuthState {
-  final bool isMatch;
-  const FaceVerificationSuccess({required this.isMatch});
+class FaceProcessingSuccess extends AuthState {
+  // تغییر نام از FaceVerificationSuccess
+  final bool success; // در اینجا به جای isMatch، از success استفاده می‌کنیم
+  const FaceProcessingSuccess({required this.success});
 
   @override
-  List<Object> get props => [isMatch];
+  List<Object> get props => [success];
 }
 
-class FaceVerificationError extends AuthState {
+class FaceProcessingError extends AuthState {
+  // تغییر نام از FaceVerificationError
   final String message;
-  const FaceVerificationError({required this.message});
+
+  const FaceProcessingError({required this.message});
 
   @override
   List<Object> get props => [message];

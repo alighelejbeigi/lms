@@ -14,5 +14,7 @@ abstract class AuthRepository {
   // مرحله Whoami: دریافت اطلاعات کاربر
   Future<Either<Failure, UserEntity>> getCurrentUser();
 
+  Future<Either<Failure, bool>> registerFace(String imagePath);
+
   Future<void> logout(); // <<<--- اضافه شده
 }

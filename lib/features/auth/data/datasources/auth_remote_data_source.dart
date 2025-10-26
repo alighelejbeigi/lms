@@ -1,5 +1,7 @@
 // lib/features/auth/data/datasources/auth_remote_data_source.dart
 
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:lms/api_client.dart';
 import 'package:lms/core/errors/failures.dart';
@@ -7,8 +9,12 @@ import 'package:lms/features/auth/data/models/user_model.dart';
 
 abstract class AuthRemoteDataSource {
   Future<bool> requestAuth(String userIdentifier);
+
   Future<UserModel> verifyAuth(String code);
+
   Future<UserModel> getCurrentUser();
+
+  Future<bool> registerFace(String imagePath);
 }
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
@@ -97,6 +103,46 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         mobile: '',
         role: '',
       ); // برای پوشش‌دهی تایپ متد
+    }
+  }
+
+  @override
+  Future<bool> registerFace(String imagePath) async {
+    try {
+      final imageFile = File(imagePath);
+
+      final formData = FormData.fromMap({
+        'userId': '93604b2a-49e5-4428-ac46-b73de880595c',
+        'image': await MultipartFile.fromFile(
+          imageFile.path,
+          filename: 'user_face_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        ),
+        'address': '',
+        'nickName': '',
+        'username': 'SuperAdmin2',
+      });
+
+      // فرض می‌کنیم API برای ثبت چهره /auth/register_face باشد
+      final response = await client.patch(
+        '/user', // <<<--- Endpoint جدید
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+      // اگر کد 200 یا 201 باشد، ثبت موفق بوده است.
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return true;
+      } else {
+        final message = response.data['message'] ?? 'ثبت چهره ناموفق بود.';
+        throw ServerFailure(message: message, statusCode: response.statusCode);
+      }
+    } on DioException catch (e) {
+      _handleDioException(e);
+      return false;
+    } catch (e) {
+      throw ServerFailure(
+        message: 'خطای سمت کاربر یا پردازش فایل: ${e.toString()}',
+      );
     }
   }
 }

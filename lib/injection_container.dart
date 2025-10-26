@@ -12,6 +12,8 @@ import 'package:lms/features/auth/domain/usecases/request_auth.dart';
 import 'package:lms/features/auth/domain/usecases/verify_auth.dart';
 import 'package:lms/features/auth/presentation/cubit/auth_cubit.dart';
 
+import 'features/auth/domain/usecases/register_face.dart';
+
 final sl = GetIt.instance; // Service Locator
 
 void init() {
@@ -21,6 +23,7 @@ void init() {
       requestAuthUseCase: sl(),
       verifyAuthUseCase: sl(),
       authRepository: sl(),
+      registerFaceUseCase: sl(),
       //compareFaceUseCase: sl(), // <<<--- تزریق شده
     ),
   );
@@ -28,6 +31,7 @@ void init() {
   // Domain layer (Use Cases)
   sl.registerLazySingleton(() => RequestAuth(sl()));
   sl.registerLazySingleton(() => VerifyAuth(sl()));
+  sl.registerLazySingleton(() => RegisterFace(sl()));
   // sl.registerLazySingleton(() => CompareFace(sl()));
 
   // Domain layer (Repository)

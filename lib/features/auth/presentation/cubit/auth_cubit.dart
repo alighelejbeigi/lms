@@ -7,18 +7,41 @@ import 'package:lms/features/auth/domain/usecases/request_auth.dart';
 import 'package:lms/features/auth/domain/usecases/verify_auth.dart';
 import 'package:lms/features/auth/presentation/cubit/auth_state.dart';
 
+import '../../domain/usecases/register_face.dart';
+
 class AuthCubit extends Cubit<AuthState> {
   final RequestAuth requestAuthUseCase;
   final VerifyAuth verifyAuthUseCase;
+  final RegisterFace registerFaceUseCase;
   final AuthRepository authRepository; // برای متد logout
 
   AuthCubit({
     required this.requestAuthUseCase,
     required this.verifyAuthUseCase,
     required this.authRepository,
+    required this.registerFaceUseCase,
   }) : super(const AuthInitial());
 
   // --- متدها ---
+
+  Future<void> registerFace(String imagePath) async {
+    emit(const FaceProcessingLoading()); // <<<--- وضعیت جدید
+
+    final failureOrSuccess = await registerFaceUseCase(
+      imagePath,
+    ); // <<<--- Use Case جدید
+
+    failureOrSuccess.fold(
+      ifLeft:
+          (failure) =>
+              emit(FaceProcessingError(message: _mapFailureToMessage(failure))),
+      // <<<--- وضعیت جدید
+      ifRight:
+          (success) => emit(
+            FaceProcessingSuccess(success: success),
+          ), // <<<--- وضعیت جدید
+    );
+  }
 
   Future<void> requestAuth(String userIdentifier) async {
     emit(const AuthLoading(step: AuthStep.identifier));

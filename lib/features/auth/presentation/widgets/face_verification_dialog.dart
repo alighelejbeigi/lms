@@ -184,7 +184,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
       final XFile imageFile = await _cameraController!.takePicture();
 
       // 3. فراخوانی Cubit برای ارسال به API
-      //authCubit.compareFace(imageFile.path);
+      authCubit.registerFace(imageFile.path);
     } on CameraException catch (e) {
       _setFeedback('خطا در گرفتن عکس: ${e.description}');
       _cameraController?.startImageStream(_processCameraImage);
@@ -203,13 +203,13 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
       builder: (context, snapshot) {
         return BlocListener<AuthCubit, AuthState>(
           listener: (context, state) {
-            if (state is FaceVerificationSuccess ||
-                state is FaceVerificationError) {
+            if (state is FaceProcessingLoading ||
+                state is FaceProcessingError) {
               _cameraController?.startImageStream(_processCameraImage);
             }
-            if (state is FaceVerificationSuccess) {
-              Navigator.of(context).pop(state.isMatch);
-            } else if (state is FaceVerificationError) {
+            if (state is FaceProcessingSuccess) {
+              Navigator.of(context).pop(state.success);
+            } else if (state is FaceProcessingError) {
               _setFeedback('خطا: ${state.message}. دوباره تلاش کنید.');
             }
           },
@@ -281,7 +281,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
               ),
               BlocBuilder<AuthCubit, AuthState>(
                 builder: (context, state) {
-                  final isLoading = state is FaceVerificationLoading;
+                  final isLoading = state is FaceProcessingLoading;
                   return ElevatedButton(
                     // دکمه فقط زمانی فعال است که: دوربین آماده، کیفیت تایید شده باشد و پردازشی در حال انجام نباشد.
                     onPressed:
