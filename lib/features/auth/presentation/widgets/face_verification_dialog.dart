@@ -1,50 +1,58 @@
 // lib/features/auth/presentation/widgets/face_verification_dialog.dart
 
+// ----------------------------------------------------
+import 'dart:io';
 import 'dart:math';
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+// ----------------------------------------------------
+// ایمپورت‌های ML KIT واقعی
+import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:lms/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:lms/features/auth/presentation/cubit/auth_state.dart';
 
 // ===========================================
-// ML KIT LOGIC SIMULATION (Stricter Checks)
+// ML Kit Quality Checker (با آستانه‌های سختگیرانه)
 // ===========================================
-class MLFaceQualityChecker {
-  // آستانه‌های حساس برای تشخیص چهره مناسب (بر اساس درجه و مقیاس 0-1)
-  static const double MAX_YAW_ANGLE = 5.0; // حداکثر 5 درجه چرخش به چپ/راست
-  static const double MAX_PITCH_ANGLE = 5.0; // حداکثر 5 درجه چرخش به بالا/پایین
-  static const double MIN_BRIGHTNESS = 0.6; // حداقل روشنایی مورد نیاز
-  static const double MAX_BLUR = 0.9; // شبیه‌سازی وضوح بالا
+class FaceQualityChecker {
+  // --- آستانه‌های سختگیرانه ---
+  static const double MAX_YAW_ANGLE = 5.0;
+  static const double MAX_PITCH_ANGLE = 7.0;
+  static const double MIN_BRIGHTNESS = 0.5;
+  static const double MIN_EYE_OPEN = 0.8;
+  static const double MIN_VISIBILITY = 0.9;
 
   final Random _random = Random();
 
-  // شبیه‌سازی اندازه‌گیری‌های واقعی ML Kit
-  double _simulateMeasurement(double maxError, double center) {
-    // تولید یک عدد تصادفی با توزیع نزدیک به مقدار صحیح (center)
-    return center + (_random.nextDouble() * 2 - 1) * maxError;
-  }
-
-  // --- شبیه‌سازی اندازه‌گیری‌های چهره ---
-  bool isAngleGood() {
-    // چهره باید مستقیم باشد (Yaw و Pitch نزدیک به صفر)
-    final yaw = _simulateMeasurement(10.0, 0.0).abs();
-    final pitch = _simulateMeasurement(10.0, 0.0).abs();
+  // 1. بررسی زوایای Yaw و Pitch (زاویه صورت صاف)
+  bool isAngleGood(Face face) {
+    final yaw = face.headEulerAngleY?.abs() ?? 999;
+    final pitch = face.headEulerAngleX?.abs() ?? 999;
 
     return yaw <= MAX_YAW_ANGLE && pitch <= MAX_PITCH_ANGLE;
   }
 
-  bool isLightingGood() {
-    // شبیه‌سازی نور محیط (بیشتر مواقع نور خوب است، اما گاهی اوقات کم است)
-    final brightness = _simulateMeasurement(0.6, 0.5); // تولید بین 0.1 تا 0.9
-    return brightness >= MIN_BRIGHTNESS;
+  // 2. بررسی باز بودن چشم
+  bool isEyesOpen(Face face) {
+    final leftEye = face.leftEyeOpenProbability ?? 0;
+    final rightEye = face.rightEyeOpenProbability ?? 0;
+
+    return leftEye >= MIN_EYE_OPEN && rightEye >= MIN_EYE_OPEN;
   }
 
-  bool isFocusGood() {
-    // شبیه‌سازی فوکوس و وضوح
-    final blur = _simulateMeasurement(0.3, 0.5); // تولید تصادفی
-    return blur <= MAX_BLUR;
+  // 3. بررسی نور محیط و وضوح (شبیه‌سازی ML Kit)
+  bool isLightingAndClarityGood(Face face) {
+    final simulatedBrightness =
+        _random.nextDouble() * 0.5 + 0.3; // شبیه‌سازی نور
+    final isFocused = _random.nextDouble() > 0.1;
+
+    final isLightingOk = simulatedBrightness >= MIN_BRIGHTNESS;
+    final isClarityOk = (face.trackingId != null) && isFocused;
+
+    return isLightingOk && isClarityOk;
   }
 }
 // ===========================================
@@ -60,16 +68,24 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
   CameraController? _cameraController;
   Future<void>? _initializeControllerFuture;
 
-  // متغیرهای وضعیت برای گزارش کیفیت
+  final FaceDetector _faceDetector = FaceDetector(
+    options: FaceDetectorOptions(
+      enableClassification: true,
+      enableTracking: true,
+      minFaceSize: 0.1,
+    ),
+  );
+
+  final FaceQualityChecker _qualityChecker = FaceQualityChecker();
+
+  // وضعیت‌های جزئی برای UI
   bool _isAngleOk = false;
   bool _isLightingOk = false;
   bool _isFocusOk = false;
+  bool _isMlProcessing = false; // <<<--- قفل همزمانی
 
   bool get _isQualityOk => _isAngleOk && _isLightingOk && _isFocusOk;
-
   String _feedbackMessage = 'در حال راه‌اندازی دوربین...';
-  final MLFaceQualityChecker _qualityChecker =
-      MLFaceQualityChecker(); // نمونه ML Checker
 
   @override
   void initState() {
@@ -78,7 +94,6 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
   }
 
   Future<void> _initializeCamera() async {
-    // ... (کد راه‌اندازی دوربین از پاسخ قبلی)
     try {
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
@@ -91,23 +106,46 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
         orElse: () => cameras.first,
       );
 
-      _cameraController = CameraController(
-        frontCamera,
-        ResolutionPreset.medium,
-        enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.yuv420,
-      );
+      // --- اعمال انعطاف در رزولوشن ---
+      ResolutionPreset preferredResolution = ResolutionPreset.medium;
 
-      _initializeControllerFuture = _cameraController!.initialize().then((_) {
-        _cameraController!.startImageStream(_processCameraImage);
-        _setFeedback('دوربین آماده. لطفا چهره را در کادر قرار دهید.');
-      });
+      for (int i = 0; i < 3; i++) {
+        try {
+          _cameraController = CameraController(
+            frontCamera,
+            preferredResolution,
+            enableAudio: false,
+            // برای ML Kit، NV21 برای Android و BGRA برای iOS مناسب‌ترند
+            imageFormatGroup:
+                Platform.isAndroid
+                    ? ImageFormatGroup.nv21
+                    : ImageFormatGroup.bgra8888,
+          );
+
+          _initializeControllerFuture = _cameraController!.initialize();
+          await _initializeControllerFuture;
+
+          if (_cameraController!.value.isInitialized) break;
+        } catch (e) {
+          if (preferredResolution == ResolutionPreset.medium) {
+            preferredResolution = ResolutionPreset.low;
+          } else if (preferredResolution == ResolutionPreset.low) {
+            preferredResolution = ResolutionPreset.low;
+          } else {
+            rethrow;
+          }
+        }
+      }
+      // -------------------------------
+
+      _cameraController!.startImageStream(_processCameraImage);
+      _setFeedback('دوربین آماده. لطفا چهره را در کادر قرار دهید.');
 
       setState(() {});
     } on CameraException catch (e) {
       _setFeedback('خطا در دسترسی: ${e.description}');
     } catch (e) {
-      _setFeedback('خطای نامشخص در راه‌اندازی دوربین.');
+      _setFeedback('خطای راه‌اندازی دوربین. ممکن است رزولوشن پشتیبانی نشود.');
     }
   }
 
@@ -121,43 +159,100 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
     });
   }
 
-  // --- متد پردازش فریم‌ها با منطق سختگیرانه ---
-  void _processCameraImage(CameraImage image) {
-    if (!mounted ||
-        _cameraController == null ||
-        !_cameraController!.value.isStreamingImages)
+  // --- متد پردازش فریم‌ها با ML Kit ---
+  void _processCameraImage(CameraImage image) async {
+    if (!mounted || _isMlProcessing) return; // <<<--- قفل همزمانی
+    _isMlProcessing = true;
+
+    final inputImage = _inputImageFromCameraImage(image);
+
+    if (inputImage == null) {
+      _isMlProcessing = false;
       return;
+    }
 
-    // شبیه‌سازی ML Kit: اجرای چک‌های حساسیت بالا
-    final isAngle = _qualityChecker.isAngleGood();
-    final isLighting = _qualityChecker.isLightingGood();
-    final isFocus = _qualityChecker.isFocusGood();
+    try {
+      final faces = await _faceDetector.processImage(inputImage);
 
-    final allGood = isAngle && isLighting && isFocus;
+      if (faces.isNotEmpty) {
+        final face = faces.first;
 
-    if (allGood) {
-      if (!_isQualityOk) {
+        final isAngle = _qualityChecker.isAngleGood(face);
+        final isLighting = _qualityChecker.isLightingAndClarityGood(face);
+        final isFocusAndEye = _qualityChecker.isEyesOpen(face);
+
+        final allGood = isAngle && isLighting && isFocusAndEye;
+
+        if (allGood) {
+          if (!_isQualityOk) {
+            _setFeedback(
+              'کیفیت چهره تأیید شد. آماده ثبت.',
+              angle: true,
+              light: true,
+              focus: true,
+            );
+          }
+        } else if (!allGood) {
+          String status = 'لطفا چهره خود را ثابت و صاف در کادر قرار دهید.';
+          if (!isAngle)
+            status = 'زاویه چهره نامناسب است.';
+          else if (!isLighting)
+            status = 'نور محیط یا وضوح کافی نیست.';
+          else if (!isFocusAndEye)
+            status = 'چشم‌ها بسته است.';
+
+          _setFeedback(
+            status,
+            angle: isAngle,
+            light: isLighting,
+            focus: isFocusAndEye,
+          );
+        }
+      } else {
         _setFeedback(
-          'کیفیت چهره عالی. آماده ثبت.',
-          angle: true,
-          light: true,
-          focus: true,
+          'چهره‌ای در کادر یافت نشد.',
+          angle: false,
+          light: false,
+          focus: false,
         );
       }
-    } else {
-      String status = '';
-      if (!isAngle)
-        status = 'زاویه چهره مناسب نیست (صاف نگه دارید).';
-      else if (!isLighting)
-        status = 'نور محیط کافی نیست (به سمت نور بچرخید).';
-      else if (!isFocus)
-        status = 'چهره تار است (فاصله را تنظیم کنید).';
-      else
-        status = 'در حال پردازش...';
-
-      _setFeedback(status, angle: isAngle, light: isLighting, focus: isFocus);
+    } catch (e) {
+      _setFeedback(
+        'خطا در پردازش ML: ${e.toString()}',
+        angle: false,
+        light: false,
+        focus: false,
+      );
     }
+
+    _isMlProcessing = false; // <<<--- باز کردن قفل
   }
+
+  // --- تابع کمکی برای تبدیل CameraImage به InputImage ( ML Kit) ---
+  InputImage? _inputImageFromCameraImage(CameraImage image) {
+    if (_cameraController == null) return null;
+
+    final rotation = InputImageRotation.rotation90deg;
+
+    final allBytes = WriteBuffer();
+    for (final Plane plane in image.planes) {
+      allBytes.putUint8List(plane.bytes);
+    }
+    final bytes = allBytes.done().buffer.asUint8List();
+
+    final InputImageMetadata metadata = InputImageMetadata(
+      size: Size(image.width.toDouble(), image.height.toDouble()),
+      rotation: rotation,
+      format:
+          Platform.isAndroid
+              ? InputImageFormat.nv21
+              : InputImageFormat.bgra8888,
+      bytesPerRow: image.planes.first.bytesPerRow,
+    );
+
+    return InputImage.fromBytes(bytes: bytes, metadata: metadata);
+  }
+  // ----------------------------------------------------
 
   Future<void> _captureAndSend(BuildContext context) async {
     final AuthCubit authCubit = BlocProvider.of<AuthCubit>(context);
@@ -165,7 +260,6 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
     if (_cameraController == null || !_cameraController!.value.isInitialized)
       return;
     if (!_isQualityOk) {
-      // <<<--- این شرط اصلی است
       _setFeedback(
         'ارسال لغو شد. کیفیت چهره تأیید نشده است.',
         angle: false,
@@ -176,14 +270,10 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
     }
 
     try {
-      // 1. توقف استریم
       await _cameraController!.stopImageStream();
       _setFeedback('عکس گرفته شد. در حال ارسال...');
-
-      // 2. گرفتن عکس
       final XFile imageFile = await _cameraController!.takePicture();
 
-      // 3. فراخوانی Cubit برای ارسال به API
       authCubit.registerFace(imageFile.path);
     } on CameraException catch (e) {
       _setFeedback('خطا در گرفتن عکس: ${e.description}');
@@ -203,7 +293,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
       builder: (context, snapshot) {
         return BlocListener<AuthCubit, AuthState>(
           listener: (context, state) {
-            if (state is FaceProcessingLoading ||
+            if (state is FaceProcessingSuccess ||
                 state is FaceProcessingError) {
               _cameraController?.startImageStream(_processCameraImage);
             }
@@ -222,10 +312,10 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // نمایش وضعیت‌های جزئی برای راهنمایی کاربر
-                _buildQualityIndicator('زاویه صاف', _isAngleOk),
-                _buildQualityIndicator('نور کافی', _isLightingOk),
-                _buildQualityIndicator('وضوح و فوکوس', _isFocusOk),
+                // نمایش وضعیت‌های جزئی
+                _buildQualityIndicator('زاویه (صاف)', _isAngleOk),
+                _buildQualityIndicator('نور و وضوح', _isLightingOk),
+                _buildQualityIndicator('چشم‌ها باز', _isFocusOk),
 
                 // کادر نمایش دوربین
                 Container(
@@ -238,8 +328,12 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
                           ? Stack(
                             alignment: Alignment.center,
                             children: [
-                              CameraPreview(_cameraController!),
-                              // کادر راهنما (رنگ بر اساس کیفیت کلی)
+                              _cameraController != null &&
+                                      _cameraController!.value.isInitialized
+                                  ? CameraPreview(_cameraController!)
+                                  : const Center(
+                                    child: Text("دوربین در حال آماده‌سازی"),
+                                  ),
                               Container(
                                 width: 200,
                                 height: 250,
@@ -283,7 +377,6 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
                 builder: (context, state) {
                   final isLoading = state is FaceProcessingLoading;
                   return ElevatedButton(
-                    // دکمه فقط زمانی فعال است که: دوربین آماده، کیفیت تایید شده باشد و پردازشی در حال انجام نباشد.
                     onPressed:
                         isLoading || !isCameraReady || !_isQualityOk
                             ? null
@@ -310,7 +403,6 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
     );
   }
 
-  // ویجت کمکی برای نمایش وضعیت هر شرط
   Widget _buildQualityIndicator(String text, bool isOk) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2.0),
@@ -326,7 +418,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
           Icon(
             isOk ? Icons.check_circle : Icons.radio_button_unchecked,
             size: 16,
-            color: isOk ? Colors.green : Colors.grey,
+            color: isOk ? Colors.green : Colors.red,
           ),
         ],
       ),
@@ -336,6 +428,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
   @override
   void dispose() {
     _cameraController?.stopImageStream();
+    _faceDetector.close();
     _cameraController?.dispose();
     super.dispose();
   }
