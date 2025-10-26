@@ -34,6 +34,12 @@ dependencies:
   cookie_jar:
   dio_cookie_manager:
   flutter_secure_storage:
+  go_router:
+  flutter_bloc:
+  bloc:
+  equatable:
+  dart_either:
+  get_it:
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

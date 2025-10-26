@@ -50,6 +50,11 @@ class ApiClient {
     await _storage.write(key: _TOKEN_KEY, value: token);
   }
 
+  // عمومی کردن TOKEN_KEY
+  static const String TOKEN_KEY = 'access_token'; // <<<--- تغییر یافته
+
+  // Getter عمومی برای دسترسی به storage
+  FlutterSecureStorage get storage => _storage; // <<<--- متد Getter جدید
   // متد حذف توکن (برای خروج از حساب)
   Future<void> deleteToken() async {
     await _storage.delete(key: _TOKEN_KEY);
