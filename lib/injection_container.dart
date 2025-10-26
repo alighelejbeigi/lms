@@ -21,12 +21,14 @@ void init() {
       requestAuthUseCase: sl(),
       verifyAuthUseCase: sl(),
       authRepository: sl(),
+      //compareFaceUseCase: sl(), // <<<--- تزریق شده
     ),
   );
 
   // Domain layer (Use Cases)
   sl.registerLazySingleton(() => RequestAuth(sl()));
   sl.registerLazySingleton(() => VerifyAuth(sl()));
+  // sl.registerLazySingleton(() => CompareFace(sl()));
 
   // Domain layer (Repository)
   sl.registerLazySingleton<AuthRepository>(

@@ -23,6 +23,7 @@ class MyApp extends StatelessWidget {
       // استفاده از sl<AuthCubit>() برای گرفتن AuthCubit تزریق شده
       create: (context) => GetIt.instance.get<AuthCubit>()..checkAuthStatus(),
       child: MaterialApp.router(
+        debugShowCheckedModeBanner: false,
         title: 'LMS',
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),

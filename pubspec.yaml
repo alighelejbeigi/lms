@@ -41,6 +41,10 @@ dependencies:
   dart_either:
   get_it:
   url_launcher:
+  camera:
+  path_provider:
+  path:
+  google_mlkit_face_detection:
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

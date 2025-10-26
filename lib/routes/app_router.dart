@@ -5,11 +5,13 @@ import 'package:go_router/go_router.dart';
 import 'package:lms/api_client.dart';
 
 import '../features/auth/presentation/pages/login_page.dart';
+import '../features/auth/presentation/pages/success_page.dart';
 import '../features/auth/presentation/pages/whoami_page.dart';
 
 class AppRoutes {
   static const String login = '/login';
   static const String whoami = '/whoami';
+  static const String successPage = '/successPage';
 }
 
 final GoRouter router = GoRouter(
@@ -24,6 +26,10 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: AppRoutes.whoami,
       builder: (context, state) => const WhoamiPage(),
+    ),
+    GoRoute(
+      path: AppRoutes.successPage,
+      builder: (context, state) => const SuccessPage(),
     ),
   ],
 

@@ -58,3 +58,23 @@ class AuthError extends AuthState {
   @override
   List<Object> get props => [message, step];
 }
+
+class FaceVerificationLoading extends AuthState {
+  const FaceVerificationLoading();
+}
+
+class FaceVerificationSuccess extends AuthState {
+  final bool isMatch;
+  const FaceVerificationSuccess({required this.isMatch});
+
+  @override
+  List<Object> get props => [isMatch];
+}
+
+class FaceVerificationError extends AuthState {
+  final String message;
+  const FaceVerificationError({required this.message});
+
+  @override
+  List<Object> get props => [message];
+}
