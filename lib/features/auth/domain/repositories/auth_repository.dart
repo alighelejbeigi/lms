@@ -16,5 +16,8 @@ abstract class AuthRepository {
 
   Future<Either<Failure, bool>> registerFace(String imagePath);
 
+  Future<Either<Failure, bool>> compareFaceWithAvatar(
+    String imagePath,
+  ); // <<<--- متد جدید
   Future<void> logout(); // <<<--- اضافه شده
 }

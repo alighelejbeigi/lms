@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:lms/api_client.dart';
 import 'package:lms/core/errors/failures.dart';
 import 'package:lms/features/auth/data/models/user_model.dart';
+import 'package:path_provider/path_provider.dart';
 
 abstract class AuthRemoteDataSource {
   Future<bool> requestAuth(String userIdentifier);
@@ -15,6 +16,7 @@ abstract class AuthRemoteDataSource {
   Future<UserModel> getCurrentUser();
 
   Future<bool> registerFace(String imagePath);
+  Future<String> downloadAvatar(String relativeUrl); // <<<--- متد جدید
 }
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
@@ -119,7 +121,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         ),
         'address': '',
         'nickName': '',
-        'username': 'SuperAdmin2',
+        'username': 'superadmin',
       });
 
       // فرض می‌کنیم API برای ثبت چهره /auth/register_face باشد
@@ -142,6 +144,39 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     } catch (e) {
       throw ServerFailure(
         message: 'خطای سمت کاربر یا پردازش فایل: ${e.toString()}',
+      );
+    }
+  }
+
+  @override
+  Future<String> downloadAvatar(String relativeUrl) async {
+    try {
+      final dir = await getTemporaryDirectory();
+      final filename = relativeUrl.split('/').last;
+      final path = '${dir.path}/$filename';
+
+      final fullUrl = apiClient.dio.options.baseUrl + relativeUrl;
+
+      final response = await client.download(
+        fullUrl,
+        path,
+        options: Options(responseType: ResponseType.bytes),
+      );
+
+      if (response.statusCode == 200) {
+        return path;
+      } else {
+        throw ServerFailure(
+          message: 'خطا در دانلود آواتار: ${response.statusCode}',
+          statusCode: response.statusCode,
+        );
+      }
+    } on DioException catch (e) {
+      _handleDioException(e);
+      rethrow;
+    } catch (e) {
+      throw ServerFailure(
+        message: 'خطای سیستمی در دانلود فایل: ${e.toString()}',
       );
     }
   }
