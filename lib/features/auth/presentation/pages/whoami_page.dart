@@ -14,13 +14,11 @@ class WhoamiPage extends StatelessWidget {
 
   // متد برای باز کردن دیالوگ دوربین
   void _showFaceVerificationDialog(BuildContext context) async {
-    // باز کردن دیالوگ و دریافت نتیجه (true/false)
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder:
           (ctx) => BlocProvider.value(
-            // ارسال Cubit موجود به دیالوگ برای اجرای compareFace
             value: BlocProvider.of<AuthCubit>(context),
             child: const FaceVerificationDialog(),
           ),
@@ -28,7 +26,7 @@ class WhoamiPage extends StatelessWidget {
 
     if (context.mounted) {
       if (result == true) {
-        context.go(AppRoutes.successPage); // مطابقت داشت
+        context.go(AppRoutes.successPage);
       } else if (result == false) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('تایید چهره ناموفق بود یا لغو شد.')),
@@ -37,27 +35,113 @@ class WhoamiPage extends StatelessWidget {
     }
   }
 
-  // ویجت کمکی برای نمایش اطلاعات کاربر
+  // ویجت کمکی برای نمایش اطلاعات کاربر (آپدیت شده با تمام فیلدهای جدید)
   Widget _buildUserInfo(UserEntity user) {
-    return Column(
-      children: [
-        const Text(
-          'اطلاعات کاربری:',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          textDirection: TextDirection.rtl,
+    // URL پایه برای تصاویر پروفایل (باید در محیط شما تنظیم شود)
+    // فرض می‌کنیم تصویر کامل از ترکیب baseUrl و profileImage ساخته می‌شود:
+    const String baseUrl = "http://192.168.192.185:3001/";
+    final String profileImagePath = user.profile?.profileImage ?? '';
+
+    // اگر مسیر تصویر با 'http' شروع نشده باشد، آن را با baseUrl ترکیب می‌کنیم
+    final String fullImageUrl =
+        profileImagePath.startsWith('http')
+            ? profileImagePath
+            : (profileImagePath.isNotEmpty ? baseUrl + profileImagePath : '');
+
+    final ImageProvider avatarImage =
+        fullImageUrl.isNotEmpty
+            ? NetworkImage(fullImageUrl) as ImageProvider
+            : const AssetImage(
+              'assets/images/placeholder.png',
+            ); // باید یک تصویر جایگزین تعریف کنید
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Center(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // عکس پروفایل
+            CircleAvatar(
+              radius: 60,
+              backgroundColor: Colors.grey.shade300,
+              backgroundImage: avatarImage,
+            ),
+            const SizedBox(height: 16),
+
+            // نام و نام مستعار
+            Text(
+              user.profile?.nickName ?? '---',
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              textDirection: TextDirection.rtl,
+            ),
+            Text(
+              'نقش: ${user.role}',
+              style: const TextStyle(fontSize: 16, color: Colors.blueAccent),
+              textDirection: TextDirection.rtl,
+            ),
+            const SizedBox(height: 30),
+
+            // جدول جزئیات
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              constraints: const BoxConstraints(maxWidth: 500),
+              child: Column(
+                children: [
+                  _buildDetailRow('شناسه کاربری', user.id),
+                  _buildDetailRow('نام کاربری', user.username),
+                  _buildDetailRow('شماره موبایل', user.mobile),
+                  _buildDetailRow('کد ERP', user.erpCode),
+                  _buildDetailRow(
+                    'تایید هویت',
+                    user.isVerified == true ? 'تایید شده' : 'تایید نشده',
+                  ),
+                  _buildDetailRow(
+                    'فروشنده عمده',
+                    user.wholeSeller == true ? 'بله' : 'خیر',
+                  ),
+                  _buildDetailRow('نوع قیمت', user.priceType?.toString()),
+                  _buildDetailRow(
+                    'شناسه پروفایل',
+                    user.profile?.id?.toString(),
+                  ),
+                  _buildDetailRow('آدرس', user.profile?.address),
+                ],
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 10),
-        Text(
-          'خوش آمدید، ${user.username}!',
-          style: const TextStyle(fontSize: 18),
-          textDirection: TextDirection.rtl,
-        ), //
-        Text(
-          'شماره موبایل: ${user.mobile}',
-          textDirection: TextDirection.rtl,
-        ), //
-        Text('نقش: ${user.role}', textDirection: TextDirection.rtl), //
-      ],
+      ),
+    );
+  }
+
+  // ویجت کمکی برای نمایش یک ردیف جزئیات
+  Widget _buildDetailRow(String label, dynamic value) {
+    String displayValue =
+        (value == null || value.toString().isEmpty) ? '---' : value.toString();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        textDirection: TextDirection.rtl,
+        children: [
+          Text(
+            '$label:',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            textDirection: TextDirection.rtl,
+          ),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(
+              displayValue,
+              style: const TextStyle(fontSize: 16),
+              textAlign: TextAlign.left,
+              textDirection: TextDirection.rtl,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -76,53 +160,45 @@ class WhoamiPage extends StatelessWidget {
           ),
         ],
       ),
-      // BlocConsumer برای شنیدن تغییرات وضعیت (مثل خروج) و نمایش داده (AuthSuccess)
       body: BlocConsumer<AuthCubit, AuthState>(
         listener: (context, state) {
           if (state is AuthInitial) {
-            // خروج موفقیت‌آمیز، هدایت به صفحه ورود
             context.go(AppRoutes.login);
           }
         },
         builder: (context, state) {
           if (state is AuthSuccess) {
-            // وضعیت موفقیت احراز هویت: نمایش داده‌های Whoami
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildUserInfo(state.user),
-                    const SizedBox(height: 40),
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  _buildUserInfo(state.user),
+                  const SizedBox(height: 40),
 
-                    ElevatedButton.icon(
-                      onPressed: () => _showFaceVerificationDialog(context),
-                      icon: const Icon(Icons.camera_alt),
-                      label: const Text('شروع تایید چهره هوشمند'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 15,
-                        ),
+                  // دکمه تایید چهره
+                  ElevatedButton.icon(
+                    onPressed: () => _showFaceVerificationDialog(context),
+                    icon: const Icon(Icons.camera_alt),
+                    label: const Text('شروع تایید چهره هوشمند'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 15,
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () => authCubit.checkAuthStatus(),
-                      child: const Text('بارگذاری مجدد اطلاعات'),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // دکمه رفرش
+                  ElevatedButton(
+                    onPressed: () => authCubit.checkAuthStatus(),
+                    child: const Text('بارگذاری مجدد اطلاعات'),
+                  ),
+                ],
               ),
             );
-          } else if (state is AuthLoading &&
-              state.step == AuthStep.identifier) {
-            // در حال بارگذاری اولیه اطلاعات کاربر (whoami)
-            return const Center(child: CircularProgressIndicator());
           } else if (state is AuthError) {
-            // اگر در بارگذاری whoami خطا رخ داد
             return Center(
               child: Text(
                 'خطا در بارگذاری اطلاعات: ${state.message}',
@@ -132,8 +208,11 @@ class WhoamiPage extends StatelessWidget {
             );
           }
 
-          // حالت پیش‌فرض (مثل زمانی که AuthCubit هنوز AuthSuccess را Emit نکرده یا در حال پردازش‌های دیگر است)
-          return const Center(child: CircularProgressIndicator());
+          return const Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.blueAccent),
+            ),
+          );
         },
       ),
     );

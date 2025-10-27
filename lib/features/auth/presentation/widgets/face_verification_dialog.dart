@@ -320,7 +320,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
                 // کادر نمایش دوربین
                 Container(
                   width: 300,
-                  height: 350,
+                  height: 330,
                   margin: const EdgeInsets.symmetric(vertical: 10),
                   child:
                       isCameraReady &&
