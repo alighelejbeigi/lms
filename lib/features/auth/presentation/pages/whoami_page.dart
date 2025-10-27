@@ -179,7 +179,7 @@ class WhoamiPage extends StatelessWidget {
                   ElevatedButton.icon(
                     onPressed: () => _showFaceVerificationDialog(context),
                     icon: const Icon(Icons.camera_alt),
-                    label: const Text('شروع تایید چهره هوشمند'),
+                    label: const Text('شروع ثبت چهره هوشمند'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.teal,
                       padding: const EdgeInsets.symmetric(
