@@ -1,6 +1,7 @@
 // lib/features/auth/presentation/widgets/face_verification_dialog.dart
 
 // ----------------------------------------------------
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -12,7 +13,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:lms/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:lms/features/auth/presentation/cubit/auth_state.dart';
-import 'package:lottie/lottie.dart'; // <<<--- NEW Import
+import 'package:lottie/lottie.dart';
 // ----------------------------------------------------
 
 // ===========================================
@@ -60,7 +61,7 @@ class FaceQualityChecker {
 
 class FaceVerificationDialog extends StatefulWidget {
   final bool
-  isRegistrationMode; // <<<--- NEW Parameter: true for Registration (ML Kit), false for Comparison (TFLite)
+  isRegistrationMode; // true: Registration (Manual), false: Comparison (Auto)
 
   const FaceVerificationDialog({super.key, this.isRegistrationMode = true});
 
@@ -91,11 +92,74 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
   bool get _isQualityOk => _isAngleOk && _isLightingOk && _isFocusOk;
   String _feedbackMessage = 'در حال راه‌اندازی دوربین...';
 
+  // --- NEW: State variables for Auto-Compare ---
+  Timer? _compareTimer;
+  bool _isAutoComparing = false;
+  // ---------------------------------------------
+
   @override
   void initState() {
     super.initState();
     _initializeCamera();
+
+    // NEW: شروع تایمر برای مقایسه خودکار در حالت Comparison Mode
+    if (!widget.isRegistrationMode) {
+      _compareTimer = Timer.periodic(
+        const Duration(milliseconds: 500),
+        _autoCompareCheck,
+      );
+    }
   }
+
+  // --- NEW: Auto-Compare Check (Timer Callback) ---
+  void _autoCompareCheck(Timer timer) async {
+    // اگر در حالت مقایسه نباشیم، در حال پردازش باشیم یا کیفیت خوب نباشد، ادامه نمی‌دهیم.
+    if (!mounted ||
+        _isAutoComparing ||
+        !_isQualityOk ||
+        _cameraController == null ||
+        !_cameraController!.value.isInitialized) {
+      return;
+    }
+
+    if (!widget.isRegistrationMode && _isQualityOk) {
+      await _autoCaptureAndCompare(context);
+    }
+  }
+
+  // --- NEW: Auto Capture and Compare Logic ---
+  Future<void> _autoCaptureAndCompare(BuildContext context) async {
+    if (_isAutoComparing) return;
+
+    final AuthCubit authCubit = BlocProvider.of<AuthCubit>(context);
+
+    setState(() {
+      _isAutoComparing = true;
+      _setFeedback('کیفیت تأیید شد. در حال مقایسه خودکار...');
+    });
+
+    try {
+      final XFile imageFile = await _cameraController!.takePicture();
+      await authCubit.compareFace(imageFile.path);
+
+      // حذف فایل موقت پس از ارسال
+      try {
+        await File(imageFile.path).delete();
+      } catch (_) {
+        print('Could not delete temp file.');
+      }
+    } on CameraException catch (e) {
+      _setFeedback('خطا در گرفتن عکس برای مقایسه: ${e.description}');
+    } finally {
+      if (mounted) {
+        // باز کردن قفل برای تلاش بعدی
+        setState(() {
+          _isAutoComparing = false;
+        });
+      }
+    }
+  }
+  // ---------------------------------------------
 
   Future<void> _initializeCamera() async {
     try {
@@ -161,9 +225,9 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
     });
   }
 
-  // --- متد پردازش فریم‌ها با ML Kit (برای هر دو حالت ثبت و مقایسه نیاز است) ---
+  // --- متد پردازش فریم‌ها با ML Kit (برای چک کیفیت در هر دو حالت) ---
   void _processCameraImage(CameraImage image) async {
-    if (!mounted || _isMlProcessing) return; // <<<--- قفل همزمانی
+    if (!mounted || _isMlProcessing) return;
     _isMlProcessing = true;
 
     final inputImage = _inputImageFromCameraImage(image);
@@ -190,7 +254,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
             _setFeedback(
               widget.isRegistrationMode
                   ? 'کیفیت چهره تأیید شد. آماده ثبت.'
-                  : 'کیفیت چهره تأیید شد. آماده مقایسه.',
+                  : 'کیفیت چهره تأیید شد. لطفاً ثابت بمانید.',
               angle: true,
               light: true,
               focus: true,
@@ -229,7 +293,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
       );
     }
 
-    _isMlProcessing = false; // <<<--- باز کردن قفل
+    _isMlProcessing = false;
   }
 
   // --- تابع کمکی برای تبدیل CameraImage به InputImage ( ML Kit) ---
@@ -258,11 +322,14 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
   }
   // ----------------------------------------------------
 
+  // --- Manual Capture and Send (فقط برای حالت Registration) ---
   Future<void> _captureAndSend(BuildContext context) async {
     final AuthCubit authCubit = BlocProvider.of<AuthCubit>(context);
 
     if (_cameraController == null || !_cameraController!.value.isInitialized)
       return;
+    if (!widget.isRegistrationMode) return;
+
     if (!_isQualityOk) {
       _setFeedback(
         'ارسال لغو شد. کیفیت چهره تأیید نشده است.',
@@ -278,15 +345,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
       _setFeedback('عکس گرفته شد. در حال ارسال...');
       final XFile imageFile = await _cameraController!.takePicture();
 
-      // --- LOGIC CHANGE: Dispatch to Cubit based on mode ---
-      if (widget.isRegistrationMode) {
-        // ML Kit flow (register)
-        authCubit.registerFace(imageFile.path);
-      } else {
-        // TFLite flow (compare)
-        authCubit.compareFace(imageFile.path);
-      }
-      // --------------------------------------------------------
+      authCubit.registerFace(imageFile.path);
     } on CameraException catch (e) {
       _setFeedback('خطا در گرفتن عکس: ${e.description}');
       _cameraController?.startImageStream(_processCameraImage);
@@ -300,21 +359,27 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
   Widget build(BuildContext context) {
     final isCameraReady = _cameraController?.value.isInitialized ?? false;
 
-    final buttonLabel =
-        widget.isRegistrationMode ? 'ثبت و ارسال' : 'تایید و مقایسه';
+    final buttonLabel = 'ثبت و ارسال';
     final dialogTitle = widget.isRegistrationMode ? 'ثبت چهره' : 'تایید هویت';
+
+    // حالت لودینگ ترکیبی از لودینگ Cubit و لودینگ مقایسه خودکار است.
+    final bool currentLoadingState =
+        _isAutoComparing ||
+        (BlocProvider.of<AuthCubit>(context).state is FaceProcessingLoading);
 
     return FutureBuilder<void>(
       future: _initializeControllerFuture,
       builder: (context, snapshot) {
         return BlocListener<AuthCubit, AuthState>(
           listener: (context, state) {
-            if (state is FaceProcessingSuccess ||
-                state is FaceProcessingError) {
-              _cameraController?.startImageStream(_processCameraImage);
-            }
             if (state is FaceProcessingSuccess) {
-              Navigator.of(context).pop(state.success);
+              if (state.success) {
+                // NEW: Auto-close on successful comparison OR successful registration
+                Navigator.of(context).pop(true);
+              } else if (widget.isRegistrationMode) {
+                // اگر ثبت نام ناموفق بود، دیالوگ بسته شود (با نتیجه false)
+                Navigator.of(context).pop(false);
+              }
             } else if (state is FaceProcessingError) {
               _setFeedback('خطا: ${state.message}. دوباره تلاش کنید.');
             }
@@ -329,12 +394,6 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // NEW: Lottie visual cue
-                Lottie.asset(
-                  'assets/face_scan2.json',
-                  width: 100,
-                  height: 100,
-                  fit: BoxFit.cover,
-                ),
 
                 // نمایش وضعیت‌های جزئی
                 _buildQualityIndicator('زاویه (صاف)', _isAngleOk),
@@ -355,8 +414,13 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
                               _cameraController != null &&
                                       _cameraController!.value.isInitialized
                                   ? CameraPreview(_cameraController!)
-                                  : const Center(
-                                    child: Text("دوربین در حال آماده‌سازی"),
+                                  : Center(
+                                    child: Lottie.asset(
+                                      'assets/face_scan.json',
+                                      width: 100,
+                                      height: 100,
+                                      fit: BoxFit.cover,
+                                    ),
                                   ),
                               Container(
                                 width: 200,
@@ -397,29 +461,30 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
                 onPressed: () => Navigator.of(context).pop(false),
                 child: const Text('لغو'),
               ),
-              BlocBuilder<AuthCubit, AuthState>(
-                builder: (context, state) {
-                  final isLoading = state is FaceProcessingLoading;
-                  return ElevatedButton(
-                    onPressed:
-                        isLoading || !isCameraReady || !_isQualityOk
-                            ? null
-                            : () => _captureAndSend(context),
-                    child:
-                        isLoading
-                            ? const Center(
-                              child: SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+              // دکمه فقط در حالت ثبت چهره (Registration) نمایش داده می‌شود
+              if (widget.isRegistrationMode)
+                BlocBuilder<AuthCubit, AuthState>(
+                  builder: (context, state) {
+                    return ElevatedButton(
+                      onPressed:
+                          currentLoadingState || !isCameraReady || !_isQualityOk
+                              ? null
+                              : () => _captureAndSend(context),
+                      child:
+                          currentLoadingState
+                              ? const Center(
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 ),
-                              ),
-                            )
-                            : Text(buttonLabel),
-                  );
-                },
-              ),
+                              )
+                              : Text(buttonLabel),
+                    );
+                  },
+                ),
             ],
           ),
         );
@@ -451,6 +516,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
 
   @override
   void dispose() {
+    _compareTimer?.cancel(); // <<<--- Cancel Timer
     _cameraController?.stopImageStream();
     _faceDetector.close();
     _cameraController?.dispose();
