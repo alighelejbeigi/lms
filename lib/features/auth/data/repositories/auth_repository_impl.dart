@@ -39,8 +39,24 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<Either<Failure, UserEntity>> getCurrentUser() async {
     try {
       final userModel = await remoteDataSource.getCurrentUser();
+
+      // NEW: اگر عکس پروفایل وجود داشت، آن را دانلود کرده و Embedding را ذخیره کنید.
+      final profileImageUrl = userModel.profile?.profileImage;
+
+      if (profileImageUrl != null) {
+        // تغییر مهم: await را حذف کنید. این کار باید در پس‌زمینه اجرا شود
+        // تا صفحه اصلی به سرعت بارگذاری شود و در Loading گیر نکند.
+        remoteDataSource.downloadAvatar(profileImageUrl).catchError((error) {
+          // در صورت بروز خطا در دانلود یا استخراج Embedding، آن را فقط لاگ کنید
+          // و ادامه دهید تا برنامه به خطا نخورد.
+          print('⚠️ Error in background face setup: $error');
+        });
+      }
+
+      // بلافاصله پس از دریافت اطلاعات کاربر از API، آن را برگردانید تا صفحه نمایش داده شود.
       return Right(userModel);
     } on Failure catch (e) {
+      // خطای API (مانند عدم احراز هویت) همچنان باید کاربر را به صفحه ورود برگرداند.
       return Left(e);
     }
   }
@@ -69,7 +85,6 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<Either<Failure, bool>> compareFaceWithAvatar(
     String liveImagePath,
   ) async {
-    // <<<--- NEW
     try {
       final isMatch = await remoteDataSource.compareFaceWithAvatar(
         liveImagePath,

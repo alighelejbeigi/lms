@@ -12,12 +12,19 @@ import '../../../../core/tflite/face_recognizer.dart';
 
 abstract class AuthRemoteDataSource {
   Future<bool> requestAuth(String userIdentifier);
+
   Future<UserModel> verifyAuth(String code);
+
   Future<UserModel> getCurrentUser();
+
   Future<bool> registerFace(String imagePath);
+
   Future<String> downloadAvatar(String relativeUrl);
+
   Future<bool> compareFaceWithAvatar(String liveImagePath);
+
   Future<void> _saveLocalEmbedding(List<double> embedding);
+
   Future<List<double>?> _getLocalEmbedding();
 }
 
@@ -212,11 +219,21 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<String> downloadAvatar(String relativeUrl) async {
     try {
       final dir = await getTemporaryDirectory();
+      // از آنجایی که ممکن است relativeUrl یک URL کامل باشد،
+      // برای استخراج نام فایل، همچنان از قسمت آخر آن استفاده می‌کنیم.
       final filename = relativeUrl.split('/').last;
       final path = '${dir.path}/$filename';
 
-      final fullUrl = apiClient.dio.options.baseUrl + relativeUrl;
-
+      // =============================================================
+      // اصلاح منطق ساخت fullUrl: اگر relativeUrl با 'http' شروع شود،
+      // یعنی یک آدرس مطلق است و نیازی به افزودن baseUrl نیست.
+      // =============================================================
+      final String fullUrl =
+          relativeUrl.startsWith('http')
+              ? relativeUrl
+              : apiClient.dio.options.baseUrl + '/' + relativeUrl;
+      // =============================================================  // =============================================================
+      print('🔍 Attempting to download avatar from: $fullUrl');
       final response = await client.download(
         fullUrl,
         path,
@@ -224,6 +241,18 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       );
 
       if (response.statusCode == 200) {
+        // منطق استخراج و ذخیره Embedding (بدون تغییر)
+        final embedding = await faceRecognizer.getFaceEmbedding(path);
+
+        if (embedding != null) {
+          await _saveLocalEmbedding(embedding);
+          print('🔵 Face embedding saved locally from downloaded avatar.');
+        } else {
+          print(
+            '⚠️ Face not detected or embedding extraction failed in downloaded avatar. Comparison might fail.',
+          );
+        }
+
         return path;
       } else {
         throw ServerFailure(
@@ -235,6 +264,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       _handleDioException(e);
       rethrow;
     } catch (e) {
+      if (e is Failure) rethrow;
       throw ServerFailure(
         message: 'خطای سیستمی در دانلود فایل: ${e.toString()}',
       );
