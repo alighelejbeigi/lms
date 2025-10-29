@@ -2,7 +2,7 @@
 
 import 'package:bloc/bloc.dart';
 import 'package:lms/core/errors/failures.dart';
-import 'package:lms/features/auth/domain/repositories/auth_repository.dart'; // برای متد logout
+import 'package:lms/features/auth/domain/repositories/auth_repository.dart';
 import 'package:lms/features/auth/domain/usecases/request_auth.dart';
 import 'package:lms/features/auth/domain/usecases/verify_auth.dart';
 import 'package:lms/features/auth/presentation/cubit/auth_state.dart';
@@ -14,8 +14,8 @@ class AuthCubit extends Cubit<AuthState> {
   final RequestAuth requestAuthUseCase;
   final VerifyAuth verifyAuthUseCase;
   final RegisterFace registerFaceUseCase;
-  final AuthRepository authRepository; // برای متد logout
-  final CompareFaceWithAvatar compareFaceUseCase; // <<<--- NEW
+  final AuthRepository authRepository;
+  final CompareFaceWithAvatar compareFaceUseCase;
 
   AuthCubit({
     required this.requestAuthUseCase,
@@ -25,36 +25,45 @@ class AuthCubit extends Cubit<AuthState> {
     required this.compareFaceUseCase,
   }) : super(const AuthInitial());
 
-  // --- متدها ---
+  // --- متد مقایسه چهره ---
   Future<void> compareFace(String imagePath) async {
+    print('🔵 AuthCubit: compareFace called with: $imagePath');
     emit(const FaceProcessingLoading());
 
     final failureOrIsMatch = await compareFaceUseCase(imagePath);
 
     failureOrIsMatch.fold(
-      ifLeft:
-          (failure) =>
-              emit(FaceProcessingError(message: _mapFailureToMessage(failure))),
-      ifRight: (isMatch) => emit(FaceProcessingSuccess(success: isMatch)),
+      ifLeft: (failure) {
+        print(
+          '🔴 AuthCubit: compareFace failed: ${_mapFailureToMessage(failure)}',
+        );
+        emit(FaceProcessingError(message: _mapFailureToMessage(failure)));
+      },
+      ifRight: (isMatch) {
+        print('🟢 AuthCubit: compareFace result: $isMatch');
+        emit(FaceProcessingSuccess(success: isMatch));
+      },
     );
   }
 
+  // --- متد ثبت چهره ---
   Future<void> registerFace(String imagePath) async {
-    emit(const FaceProcessingLoading()); // <<<--- وضعیت جدید
+    print('🔵 AuthCubit: registerFace called with: $imagePath');
+    emit(const FaceProcessingLoading());
 
-    final failureOrSuccess = await registerFaceUseCase(
-      imagePath,
-    ); // <<<--- Use Case جدید
+    final failureOrSuccess = await registerFaceUseCase(imagePath);
 
     failureOrSuccess.fold(
-      ifLeft:
-          (failure) =>
-              emit(FaceProcessingError(message: _mapFailureToMessage(failure))),
-      // <<<--- وضعیت جدید
-      ifRight:
-          (success) => emit(
-            FaceProcessingSuccess(success: success),
-          ), // <<<--- وضعیت جدید
+      ifLeft: (failure) {
+        print(
+          '🔴 AuthCubit: registerFace failed: ${_mapFailureToMessage(failure)}',
+        );
+        emit(FaceProcessingError(message: _mapFailureToMessage(failure)));
+      },
+      ifRight: (success) {
+        print('🟢 AuthCubit: registerFace success: $success');
+        emit(FaceProcessingSuccess(success: success));
+      },
     );
   }
 
@@ -97,7 +106,6 @@ class AuthCubit extends Cubit<AuthState> {
     );
   }
 
-  // چک کردن وضعیت احراز هویت در زمان راه‌اندازی برنامه
   Future<void> checkAuthStatus() async {
     final failureOrUser = await authRepository.getCurrentUser();
 
@@ -107,10 +115,9 @@ class AuthCubit extends Cubit<AuthState> {
     );
   }
 
-  // متد خروج از حساب
   Future<void> logout() async {
-    await authRepository.logout(); // پاکسازی کامل داده‌ها (توکن + کوکی)
-    emit(const AuthInitial()); // بازگشت به وضعیت اولیه برای هدایت UI
+    await authRepository.logout();
+    emit(const AuthInitial());
   }
 
   String _mapFailureToMessage(Failure failure) {

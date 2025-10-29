@@ -95,6 +95,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
   // --- NEW: State variables for Auto-Compare ---
   Timer? _compareTimer;
   bool _isAutoComparing = false;
+  bool _isFatalError = false; // <<<--- NEW: برای خطاهای غیرقابل ریکاوری
   // ---------------------------------------------
 
   @override
@@ -111,10 +112,11 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
     }
   }
 
-  // --- NEW: Auto-Compare Check (Timer Callback) ---
+  // --- MODIFIED: Auto-Compare Check (Stops on Fatal Error) ---
   void _autoCompareCheck(Timer timer) async {
-    // اگر در حالت مقایسه نباشیم، در حال پردازش باشیم یا کیفیت خوب نباشد، ادامه نمی‌دهیم.
+    // توقف در صورت خطای دائمی، قفل پردازش یا عدم آمادگی دوربین
     if (!mounted ||
+        _isFatalError || // <<<--- اگر خطای دائمی ثبت شده باشد
         _isAutoComparing ||
         !_isQualityOk ||
         _cameraController == null ||
@@ -132,6 +134,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
     if (_isAutoComparing) return;
 
     final AuthCubit authCubit = BlocProvider.of<AuthCubit>(context);
+    XFile? imageFile;
 
     setState(() {
       _isAutoComparing = true;
@@ -139,20 +142,28 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
     });
 
     try {
-      final XFile imageFile = await _cameraController!.takePicture();
-      await authCubit.compareFace(imageFile.path);
+      // 1. گرفتن عکس
+      imageFile = await _cameraController!.takePicture();
 
-      // حذف فایل موقت پس از ارسال
-      try {
-        await File(imageFile.path).delete();
-      } catch (_) {
-        print('Could not delete temp file.');
-      }
+      // 2. فراخوانی متد Cubit برای مقایسه (TFLite)
+      await authCubit.compareFace(imageFile.path);
     } on CameraException catch (e) {
       _setFeedback('خطا در گرفتن عکس برای مقایسه: ${e.description}');
+    } on FileSystemException catch (e) {
+      _setFeedback('خطای سیستمی فایل: ${e.message}');
+    } catch (e) {
+      print('Auto Compare Error: $e');
     } finally {
+      // 3. حذف فایل موقت در هر صورت
+      if (imageFile != null) {
+        try {
+          await File(imageFile.path).delete();
+        } catch (_) {
+          // خطا در حذف فایل موقت، صرف نظر می‌شود
+        }
+      }
+      // 4. باز کردن قفل برای تلاش بعدی
       if (mounted) {
-        // باز کردن قفل برای تلاش بعدی
         setState(() {
           _isAutoComparing = false;
         });
@@ -374,13 +385,29 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
           listener: (context, state) {
             if (state is FaceProcessingSuccess) {
               if (state.success) {
-                // NEW: Auto-close on successful comparison OR successful registration
+                // اگر عملیات موفق بود (چه ثبت چه مقایسه)، دیالوگ بسته می‌شود.
                 Navigator.of(context).pop(true);
               } else if (widget.isRegistrationMode) {
-                // اگر ثبت نام ناموفق بود، دیالوگ بسته شود (با نتیجه false)
+                // اگر ثبت نام ناموفق بود، دیالوگ بسته می‌شود (با نتیجه false)
                 Navigator.of(context).pop(false);
               }
             } else if (state is FaceProcessingError) {
+              // --- NEW LOGIC: Check for fatal error message and stop timer ---
+              // این خطا نشان می‌دهد که کاربر باید ابتدا ثبت نام کند
+              final isSetupError = state.message.contains(
+                'بردار ویژگی ذخیره شده برای مقایسه یافت نشد',
+              );
+
+              if (isSetupError && !widget.isRegistrationMode) {
+                _compareTimer?.cancel();
+                setState(() {
+                  _isFatalError = true;
+                  _feedbackMessage =
+                      'خطا: ابتدا از طریق دکمه "ثبت چهره" اقدام به ذخیره الگوی چهره کنید.';
+                });
+              }
+              // -------------------------------------------------------------
+
               _setFeedback('خطا: ${state.message}. دوباره تلاش کنید.');
             }
           },
@@ -394,6 +421,12 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // NEW: Lottie visual cue
+                Lottie.asset(
+                  'assets/face_scan.json',
+                  width: 100,
+                  height: 100,
+                  fit: BoxFit.cover,
+                ),
 
                 // نمایش وضعیت‌های جزئی
                 _buildQualityIndicator('زاویه (صاف)', _isAngleOk),
@@ -414,13 +447,8 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
                               _cameraController != null &&
                                       _cameraController!.value.isInitialized
                                   ? CameraPreview(_cameraController!)
-                                  : Center(
-                                    child: Lottie.asset(
-                                      'assets/face_scan.json',
-                                      width: 100,
-                                      height: 100,
-                                      fit: BoxFit.cover,
-                                    ),
+                                  : const Center(
+                                    child: Text("دوربین در حال آماده‌سازی"),
                                   ),
                               Container(
                                 width: 200,

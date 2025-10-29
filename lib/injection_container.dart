@@ -18,7 +18,9 @@ import 'features/auth/domain/usecases/register_face.dart';
 
 final sl = GetIt.instance; // Service Locator
 
-void init() {
+Future<void> init() async {
+  print('🔧 Starting dependency injection...');
+
   // Presentation layer
   sl.registerLazySingleton<AuthCubit>(
     () => AuthCubit(
@@ -26,7 +28,7 @@ void init() {
       verifyAuthUseCase: sl(),
       authRepository: sl(),
       registerFaceUseCase: sl(),
-      compareFaceUseCase: sl(), // <<<--- تزریق شده
+      compareFaceUseCase: sl(),
     ),
   );
 
@@ -58,5 +60,15 @@ void init() {
   sl.registerLazySingleton<Dio>(() => ApiClient.instance.dio);
   sl.registerLazySingleton<FaceRecognizer>(() => FaceRecognizer());
 
-  sl.get<FaceRecognizer>().loadModel(); // <<<--- Load model
+  // Load TFLite model (CRITICAL)
+  print('🤖 Loading TFLite model...');
+  try {
+    await sl.get<FaceRecognizer>().loadModel();
+    print('✅ TFLite model loaded successfully');
+  } catch (e) {
+    print('❌ Failed to load TFLite model: $e');
+    print('⚠️ Face recognition will not work!');
+  }
+
+  print('✅ Dependency injection completed');
 }

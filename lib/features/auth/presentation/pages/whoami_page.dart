@@ -9,24 +9,23 @@ import 'package:lms/features/auth/presentation/cubit/auth_state.dart';
 import 'package:lms/features/auth/presentation/widgets/face_verification_dialog.dart';
 import 'package:lms/routes/app_router.dart';
 
+// ایمپورت helper دیباگ
+import '../../../../core/utils/debug_embedding_helper.dart';
+
 class WhoamiPage extends StatelessWidget {
   const WhoamiPage({super.key});
 
-  // متد برای باز کردن دیالوگ دوربین (با پارامتر تعیین حالت)
   void _showFaceVerificationDialog(
     BuildContext context, {
     required bool isRegistration,
   }) async {
-    // <<<--- MODIFIED
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder:
           (ctx) => BlocProvider.value(
             value: BlocProvider.of<AuthCubit>(context),
-            child: FaceVerificationDialog(
-              isRegistrationMode: isRegistration, // <<<--- Pass the mode
-            ),
+            child: FaceVerificationDialog(isRegistrationMode: isRegistration),
           ),
     );
 
@@ -39,9 +38,13 @@ class WhoamiPage extends StatelessWidget {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(message)));
-        // فقط اگر ثبت چهره بود (Registration)، به صفحه موفقیت هدایت شود
+
+        // بررسی embedding پس از ثبت موفق
         if (isRegistration) {
-          context.go(AppRoutes.successPage);
+          await DebugEmbeddingHelper.checkEmbedding();
+          if (context.mounted) {
+            context.go(AppRoutes.successPage);
+          }
         }
       } else if (result == false) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -51,7 +54,6 @@ class WhoamiPage extends StatelessWidget {
     }
   }
 
-  // ویجت کمکی برای نمایش اطلاعات کاربر
   Widget _buildUserInfo(UserEntity user) {
     const String baseUrl = "http://192.168.192.185:3001/";
     final String profileImagePath = user.profile?.profileImage ?? '';
@@ -72,15 +74,12 @@ class WhoamiPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // عکس پروفایل
             CircleAvatar(
               radius: 60,
               backgroundColor: Colors.grey.shade300,
               backgroundImage: avatarImage,
             ),
             const SizedBox(height: 16),
-
-            // نام و نام مستعار
             Text(
               user.profile?.nickName ?? '---',
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
@@ -92,8 +91,6 @@ class WhoamiPage extends StatelessWidget {
               textDirection: TextDirection.rtl,
             ),
             const SizedBox(height: 30),
-
-            // جدول جزئیات
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               constraints: const BoxConstraints(maxWidth: 500),
@@ -126,7 +123,6 @@ class WhoamiPage extends StatelessWidget {
     );
   }
 
-  // ویجت کمکی برای نمایش یک ردیف جزئیات
   Widget _buildDetailRow(String label, dynamic value) {
     String displayValue =
         (value == null || value.toString().isEmpty) ? '---' : value.toString();
@@ -186,7 +182,7 @@ class WhoamiPage extends StatelessWidget {
                   _buildUserInfo(state.user),
                   const SizedBox(height: 40),
 
-                  // دکمه ثبت چهره (Registration - ML Kit)
+                  // دکمه ثبت چهره
                   ElevatedButton.icon(
                     onPressed:
                         () => _showFaceVerificationDialog(
@@ -194,9 +190,7 @@ class WhoamiPage extends StatelessWidget {
                           isRegistration: true,
                         ),
                     icon: const Icon(Icons.camera_alt),
-                    label: const Text(
-                      'ثبت چهره (ML Kit)',
-                    ), // <<<--- For Registration
+                    label: const Text('ثبت چهره (ML Kit)'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.teal,
                       padding: const EdgeInsets.symmetric(
@@ -207,7 +201,7 @@ class WhoamiPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
 
-                  // دکمه تایید هویت (Comparison - TFLite)
+                  // دکمه تایید هویت
                   ElevatedButton.icon(
                     onPressed:
                         () => _showFaceVerificationDialog(
@@ -215,9 +209,7 @@ class WhoamiPage extends StatelessWidget {
                           isRegistration: false,
                         ),
                     icon: const Icon(Icons.verified_user),
-                    label: const Text(
-                      'تایید هویت (TFLite)',
-                    ), // <<<--- For Comparison
+                    label: const Text('تایید هویت (TFLite)'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blueAccent,
                       padding: const EdgeInsets.symmetric(
@@ -232,6 +224,68 @@ class WhoamiPage extends StatelessWidget {
                   ElevatedButton(
                     onPressed: () => authCubit.checkAuthStatus(),
                     child: const Text('بارگذاری مجدد اطلاعات'),
+                  ),
+
+                  const Divider(height: 40, thickness: 2),
+                  const Text(
+                    '🛠️ ابزارهای دیباگ',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // دکمه چک کردن embedding
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await DebugEmbeddingHelper.checkEmbedding();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('نتیجه در Console بررسی کنید'),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.info_outline, color: Colors.blue),
+                    label: const Text('بررسی Embedding ذخیره شده'),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // دکمه پاک کردن embedding
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await DebugEmbeddingHelper.clearEmbedding();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Embedding پاک شد')),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    label: const Text('پاک کردن Embedding'),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // دکمه ذخیره embedding تستی
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await DebugEmbeddingHelper.saveTestEmbedding();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Embedding تستی ذخیره شد'),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(
+                      Icons.science_outlined,
+                      color: Colors.green,
+                    ),
+                    label: const Text('ذخیره Embedding تستی'),
                   ),
                 ],
               ),

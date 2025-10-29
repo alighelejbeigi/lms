@@ -2,14 +2,23 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:get_it/get_it.dart'; // <<<--- استفاده از GetIt
+import 'package:get_it/get_it.dart';
 import 'package:lms/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:lms/routes/app_router.dart';
 
 import 'injection_container.dart' as di;
 
-void main() {
-  di.init(); // اجرای تزریق وابستگی
+void main() async {
+  // اطمینان از initialize شدن Flutter bindings
+  WidgetsFlutterBinding.ensureInitialized();
+
+  print('🚀 Initializing app...');
+
+  // تزریق وابستگی‌ها
+  await di.init(); // <<<--- حالا async است
+
+  print('✅ Dependencies initialized');
+
   runApp(const MyApp());
 }
 
@@ -18,9 +27,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // استفاده از BlocProvider برای در دسترس قرار دادن AuthCubit
     return BlocProvider(
-      // استفاده از sl<AuthCubit>() برای گرفتن AuthCubit تزریق شده
       create: (context) => GetIt.instance.get<AuthCubit>()..checkAuthStatus(),
       child: MaterialApp.router(
         debugShowCheckedModeBanner: false,
