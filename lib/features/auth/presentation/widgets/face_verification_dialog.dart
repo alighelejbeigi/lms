@@ -8,11 +8,12 @@ import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-// ----------------------------------------------------
-// ایمپورت‌های ML KIT واقعی
+// ایمپورت‌های ML KIT
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:lms/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:lms/features/auth/presentation/cubit/auth_state.dart';
+import 'package:lottie/lottie.dart'; // <<<--- NEW Import
+// ----------------------------------------------------
 
 // ===========================================
 // ML Kit Quality Checker (با آستانه‌های سختگیرانه)
@@ -58,7 +59,10 @@ class FaceQualityChecker {
 // ===========================================
 
 class FaceVerificationDialog extends StatefulWidget {
-  const FaceVerificationDialog({super.key});
+  final bool
+  isRegistrationMode; // <<<--- NEW Parameter: true for Registration (ML Kit), false for Comparison (TFLite)
+
+  const FaceVerificationDialog({super.key, this.isRegistrationMode = true});
 
   @override
   State<FaceVerificationDialog> createState() => _FaceVerificationDialogState();
@@ -106,7 +110,6 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
         orElse: () => cameras.first,
       );
 
-      // --- اعمال انعطاف در رزولوشن ---
       ResolutionPreset preferredResolution = ResolutionPreset.medium;
 
       for (int i = 0; i < 3; i++) {
@@ -136,7 +139,6 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
           }
         }
       }
-      // -------------------------------
 
       _cameraController!.startImageStream(_processCameraImage);
       _setFeedback('دوربین آماده. لطفا چهره را در کادر قرار دهید.');
@@ -159,7 +161,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
     });
   }
 
-  // --- متد پردازش فریم‌ها با ML Kit ---
+  // --- متد پردازش فریم‌ها با ML Kit (برای هر دو حالت ثبت و مقایسه نیاز است) ---
   void _processCameraImage(CameraImage image) async {
     if (!mounted || _isMlProcessing) return; // <<<--- قفل همزمانی
     _isMlProcessing = true;
@@ -186,7 +188,9 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
         if (allGood) {
           if (!_isQualityOk) {
             _setFeedback(
-              'کیفیت چهره تأیید شد. آماده ثبت.',
+              widget.isRegistrationMode
+                  ? 'کیفیت چهره تأیید شد. آماده ثبت.'
+                  : 'کیفیت چهره تأیید شد. آماده مقایسه.',
               angle: true,
               light: true,
               focus: true,
@@ -274,7 +278,15 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
       _setFeedback('عکس گرفته شد. در حال ارسال...');
       final XFile imageFile = await _cameraController!.takePicture();
 
-      authCubit.registerFace(imageFile.path);
+      // --- LOGIC CHANGE: Dispatch to Cubit based on mode ---
+      if (widget.isRegistrationMode) {
+        // ML Kit flow (register)
+        authCubit.registerFace(imageFile.path);
+      } else {
+        // TFLite flow (compare)
+        authCubit.compareFace(imageFile.path);
+      }
+      // --------------------------------------------------------
     } on CameraException catch (e) {
       _setFeedback('خطا در گرفتن عکس: ${e.description}');
       _cameraController?.startImageStream(_processCameraImage);
@@ -287,6 +299,10 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
   @override
   Widget build(BuildContext context) {
     final isCameraReady = _cameraController?.value.isInitialized ?? false;
+
+    final buttonLabel =
+        widget.isRegistrationMode ? 'ثبت و ارسال' : 'تایید و مقایسه';
+    final dialogTitle = widget.isRegistrationMode ? 'ثبت چهره' : 'تایید هویت';
 
     return FutureBuilder<void>(
       future: _initializeControllerFuture,
@@ -304,14 +320,22 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
             }
           },
           child: AlertDialog(
-            title: const Text(
-              'تایید هویت (Face Verification)',
+            title: Text(
+              '$dialogTitle (Face Verification)',
               textAlign: TextAlign.right,
               textDirection: TextDirection.rtl,
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // NEW: Lottie visual cue
+                Lottie.asset(
+                  'assets/face_scan2.json',
+                  width: 100,
+                  height: 100,
+                  fit: BoxFit.cover,
+                ),
+
                 // نمایش وضعیت‌های جزئی
                 _buildQualityIndicator('زاویه (صاف)', _isAngleOk),
                 _buildQualityIndicator('نور و وضوح', _isLightingOk),
@@ -392,7 +416,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog> {
                                 ),
                               ),
                             )
-                            : const Text('تأیید و ارسال'),
+                            : Text(buttonLabel),
                   );
                 },
               ),

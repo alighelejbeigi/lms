@@ -45,6 +45,9 @@ dependencies:
   path_provider:
   path:
   google_mlkit_face_detection:
+  tflite_flutter:
+  image:
+  lottie:
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -102,3 +105,8 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+  assets:
+    - assets/face_detection.map
+    - assets/face_recognition.map
+    - assets/face_scan.json
+    - assets/face_scan2.json

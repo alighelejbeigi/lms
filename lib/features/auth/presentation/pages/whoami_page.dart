@@ -1,4 +1,4 @@
-// lib/features/auth/presentation/pages/profile_page.dart
+// lib/features/auth/presentation/pages/whoami_page.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,37 +12,50 @@ import 'package:lms/routes/app_router.dart';
 class WhoamiPage extends StatelessWidget {
   const WhoamiPage({super.key});
 
-  // متد برای باز کردن دیالوگ دوربین
-  void _showFaceVerificationDialog(BuildContext context) async {
+  // متد برای باز کردن دیالوگ دوربین (با پارامتر تعیین حالت)
+  void _showFaceVerificationDialog(
+    BuildContext context, {
+    required bool isRegistration,
+  }) async {
+    // <<<--- MODIFIED
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder:
           (ctx) => BlocProvider.value(
             value: BlocProvider.of<AuthCubit>(context),
-            child: const FaceVerificationDialog(),
+            child: FaceVerificationDialog(
+              isRegistrationMode: isRegistration, // <<<--- Pass the mode
+            ),
           ),
     );
 
     if (context.mounted) {
       if (result == true) {
-        context.go(AppRoutes.successPage);
+        final message =
+            isRegistration
+                ? 'ثبت چهره با موفقیت انجام شد.'
+                : 'تایید هویت با موفقیت انجام شد.';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+        // فقط اگر ثبت چهره بود (Registration)، به صفحه موفقیت هدایت شود
+        if (isRegistration) {
+          context.go(AppRoutes.successPage);
+        }
       } else if (result == false) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تایید چهره ناموفق بود یا لغو شد.')),
+          const SnackBar(content: Text('عملیات ناموفق بود یا لغو شد.')),
         );
       }
     }
   }
 
-  // ویجت کمکی برای نمایش اطلاعات کاربر (آپدیت شده با تمام فیلدهای جدید)
+  // ویجت کمکی برای نمایش اطلاعات کاربر
   Widget _buildUserInfo(UserEntity user) {
-    // URL پایه برای تصاویر پروفایل (باید در محیط شما تنظیم شود)
-    // فرض می‌کنیم تصویر کامل از ترکیب baseUrl و profileImage ساخته می‌شود:
     const String baseUrl = "http://192.168.192.185:3001/";
     final String profileImagePath = user.profile?.profileImage ?? '';
 
-    // اگر مسیر تصویر با 'http' شروع نشده باشد، آن را با baseUrl ترکیب می‌کنیم
     final String fullImageUrl =
         profileImagePath.startsWith('http')
             ? profileImagePath
@@ -51,9 +64,7 @@ class WhoamiPage extends StatelessWidget {
     final ImageProvider avatarImage =
         fullImageUrl.isNotEmpty
             ? NetworkImage(fullImageUrl) as ImageProvider
-            : const AssetImage(
-              'assets/images/placeholder.png',
-            ); // باید یک تصویر جایگزین تعریف کنید
+            : const AssetImage('assets/images/placeholder.png');
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(vertical: 16.0),
@@ -175,13 +186,40 @@ class WhoamiPage extends StatelessWidget {
                   _buildUserInfo(state.user),
                   const SizedBox(height: 40),
 
-                  // دکمه تایید چهره
+                  // دکمه ثبت چهره (Registration - ML Kit)
                   ElevatedButton.icon(
-                    onPressed: () => _showFaceVerificationDialog(context),
+                    onPressed:
+                        () => _showFaceVerificationDialog(
+                          context,
+                          isRegistration: true,
+                        ),
                     icon: const Icon(Icons.camera_alt),
-                    label: const Text('شروع ثبت چهره هوشمند'),
+                    label: const Text(
+                      'ثبت چهره (ML Kit)',
+                    ), // <<<--- For Registration
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.teal,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 15,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // دکمه تایید هویت (Comparison - TFLite)
+                  ElevatedButton.icon(
+                    onPressed:
+                        () => _showFaceVerificationDialog(
+                          context,
+                          isRegistration: false,
+                        ),
+                    icon: const Icon(Icons.verified_user),
+                    label: const Text(
+                      'تایید هویت (TFLite)',
+                    ), // <<<--- For Comparison
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,
                         vertical: 15,

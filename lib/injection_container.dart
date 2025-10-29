@@ -12,6 +12,8 @@ import 'package:lms/features/auth/domain/usecases/request_auth.dart';
 import 'package:lms/features/auth/domain/usecases/verify_auth.dart';
 import 'package:lms/features/auth/presentation/cubit/auth_cubit.dart';
 
+import 'core/tflite/face_recognizer.dart';
+import 'features/auth/domain/usecases/compare_face_with_avatar.dart';
 import 'features/auth/domain/usecases/register_face.dart';
 
 final sl = GetIt.instance; // Service Locator
@@ -24,7 +26,7 @@ void init() {
       verifyAuthUseCase: sl(),
       authRepository: sl(),
       registerFaceUseCase: sl(),
-      //compareFaceUseCase: sl(), // <<<--- تزریق شده
+      compareFaceUseCase: sl(), // <<<--- تزریق شده
     ),
   );
 
@@ -32,7 +34,7 @@ void init() {
   sl.registerLazySingleton(() => RequestAuth(sl()));
   sl.registerLazySingleton(() => VerifyAuth(sl()));
   sl.registerLazySingleton(() => RegisterFace(sl()));
-  // sl.registerLazySingleton(() => CompareFace(sl()));
+  sl.registerLazySingleton(() => CompareFaceWithAvatar(sl()));
 
   // Domain layer (Repository)
   sl.registerLazySingleton<AuthRepository>(
@@ -41,7 +43,11 @@ void init() {
 
   // Data layer (Data Sources)
   sl.registerLazySingleton<AuthRemoteDataSource>(
-    () => AuthRemoteDataSourceImpl(client: sl(), apiClient: sl()),
+    () => AuthRemoteDataSourceImpl(
+      client: sl(),
+      apiClient: sl(),
+      faceRecognizer: sl(),
+    ),
   );
 
   // External (Infrastructure)
@@ -50,4 +56,7 @@ void init() {
   );
   sl.registerLazySingleton<ApiClient>(() => ApiClient.instance);
   sl.registerLazySingleton<Dio>(() => ApiClient.instance.dio);
+  sl.registerLazySingleton<FaceRecognizer>(() => FaceRecognizer());
+
+  sl.get<FaceRecognizer>().loadModel(); // <<<--- Load model
 }

@@ -8,6 +8,8 @@ import 'package:lms/core/errors/failures.dart';
 import 'package:lms/features/auth/data/models/user_model.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../../core/tflite/face_recognizer.dart';
+
 abstract class AuthRemoteDataSource {
   Future<bool> requestAuth(String userIdentifier);
 
@@ -16,14 +18,72 @@ abstract class AuthRemoteDataSource {
   Future<UserModel> getCurrentUser();
 
   Future<bool> registerFace(String imagePath);
+
   Future<String> downloadAvatar(String relativeUrl); // <<<--- متد جدید
+  Future<bool> compareFaceWithAvatar(String liveImagePath);
+
+  Future<void> _saveLocalEmbedding(List<double> embedding);
+
+  Future<List<double>?> _getLocalEmbedding();
 }
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   final Dio client;
   final ApiClient apiClient;
+  final FaceRecognizer faceRecognizer;
 
-  AuthRemoteDataSourceImpl({required this.client, required this.apiClient});
+  AuthRemoteDataSourceImpl({
+    required this.client,
+    required this.apiClient,
+    required this.faceRecognizer,
+  });
+  static const String _EMBEDDING_KEY = 'user_face_embedding';
+
+  @override
+  Future<void> _saveLocalEmbedding(List<double> embedding) async {
+    final embeddingString = embedding.join(',');
+    await apiClient.storage.write(key: _EMBEDDING_KEY, value: embeddingString);
+  }
+
+  @override
+  Future<List<double>?> _getLocalEmbedding() async {
+    final embeddingString = await apiClient.storage.read(key: _EMBEDDING_KEY);
+    if (embeddingString == null) return null;
+
+    try {
+      return embeddingString.split(',').map(double.parse).toList();
+    } catch (e) {
+      print('Error parsing saved embedding: $e');
+      return null;
+    }
+  }
+
+  @override
+  Future<bool> compareFaceWithAvatar(String liveImagePath) async {
+    try {
+      final savedEmbedding = await _getLocalEmbedding();
+      if (savedEmbedding == null) {
+        throw const ServerFailure(
+          message:
+              'بردار ویژگی ذخیره شده برای مقایسه یافت نشد. ابتدا چهره را ثبت کنید.',
+        );
+      }
+
+      // استفاده از TFLite FaceRecognizer برای مقایسه
+      final isMatch = await faceRecognizer.compare(
+        liveImagePath,
+        savedEmbedding,
+      );
+
+      return isMatch;
+    } on Failure catch (_) {
+      rethrow;
+    } catch (e) {
+      throw ServerFailure(
+        message: 'خطا در تشخیص چهره با TFLite: ${e.toString()}',
+      );
+    }
+  }
 
   // متد کمکی برای مدیریت خطای Dio
   void _handleDioException(DioException e) {

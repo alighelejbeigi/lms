@@ -64,4 +64,19 @@ class AuthRepositoryImpl implements AuthRepository {
       return Left(e);
     }
   }
+
+  @override
+  Future<Either<Failure, bool>> compareFaceWithAvatar(
+    String liveImagePath,
+  ) async {
+    // <<<--- NEW
+    try {
+      final isMatch = await remoteDataSource.compareFaceWithAvatar(
+        liveImagePath,
+      );
+      return Right(isMatch);
+    } on Failure catch (e) {
+      return Left(e);
+    }
+  }
 }
