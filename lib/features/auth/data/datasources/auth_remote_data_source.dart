@@ -168,7 +168,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         ),
         'address': '',
         'nickName': '',
-        'username': 'superadmin',
+        'username': 'superadmin2',
       });
 
       final response = await client.patch(

@@ -7,7 +7,8 @@ plugins {
 
 android {
     namespace = "com.example.lms"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
+
 
 
     compileOptions {
