@@ -46,7 +46,6 @@ dependencies:
   path:
   google_ml_kit:
   tflite_flutter:
-    path: ../../tflite-flutter
   image:
   lottie:
 
