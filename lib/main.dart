@@ -10,7 +10,6 @@ import 'core/tflite/face_recognizer.dart';
 import 'injection_container.dart' as di;
 
 void main() async {
-  // <--- تغییر: main async شد
   // اطمینان از مقداردهی اولیه bindings برای اجرای عملیات async
   WidgetsFlutterBinding.ensureInitialized();
 
