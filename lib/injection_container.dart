@@ -21,7 +21,6 @@ final sl = GetIt.instance; // Service Locator
 Future<void> init() async {
   print('🔧 Starting dependency injection...');
 
-  // Presentation layer
   sl.registerLazySingleton<AuthCubit>(
     () => AuthCubit(
       requestAuthUseCase: sl(),
