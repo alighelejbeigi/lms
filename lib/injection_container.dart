@@ -19,7 +19,7 @@ import 'features/auth/domain/usecases/register_face.dart';
 final sl = GetIt.instance; // Service Locator
 
 Future<void> init() async {
-  print('🔧 Starting dependency injection...');
+  print('🔧     Starting dependency injection...');
 
   sl.registerLazySingleton<AuthCubit>(
     () => AuthCubit(
