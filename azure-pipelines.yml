@@ -1,29 +1,55 @@
-# Docker
-# Build a Docker image
-# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
-
 trigger:
-- main
-
-resources:
-- repo: self
+  - main
 
 variables:
+  imageRepository: 'flutter-web-app'
+  dockerLocalPort: 8080 # پورت دسترسی از سرور
   tag: '$(Build.BuildId)'
+  agentPool: 'avid'
 
 stages:
-- stage: Build
-  displayName: Build image
-  jobs:
-  - job: Build
-    displayName: Build
-    pool:
-      name: default
-    steps:
-    - task: Docker@2
-      displayName: Build an image
-      inputs:
-        command: build
-        dockerfile: '**/Dockerfile'
-        tags: |
-          $(tag)
+  - stage: BuildImage
+    displayName: 1. Build Docker Image
+    jobs:
+      - job: Build
+        displayName: Build Flutter Web Image
+        pool:
+          name: $(agentPool)
+
+        steps:
+          - checkout: self # مطمئن شوید که سورس کد را دانلود می‌کند
+
+          - task: Docker@2
+            displayName: Build the image
+            inputs:
+              command: build
+              # 💡 این مسیر اکنون باید Dockerfile را در ریشه پروژه پیدا کند
+              dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
+              tags: |
+                $(imageRepository):$(tag)
+
+  - stage: DeployContainer
+    displayName: 2. Deploy to Local Server
+    jobs:
+      - deployment: DeploymentJob
+        displayName: Deploy Container
+        pool:
+          name: $(agentPool)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                # اجرای دستورات Docker در Agent محلی
+                - script: |
+                    echo "Stopping and removing old container..."
+                    docker stop $(imageRepository) || true
+                    docker rm $(imageRepository) || true
+                    
+                    echo "Running new container on port $(dockerLocalPort)..."
+                    # اجرای کانتینر جدید: مپ کردن پورت 8080 سرور به پورت 80 کانتینر
+                    docker run -d -p $(dockerLocalPort):80 --name $(imageRepository) $(imageRepository):$(tag)
+                  displayName: Run Docker Container
+
+                - script: |
+                    echo "Deployment successful! Check http://$(Agent.MachineName):$(dockerLocalPort)"
+                  displayName: Finalize Deployment
