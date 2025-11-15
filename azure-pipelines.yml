@@ -35,6 +35,7 @@ stages:
         displayName: Deploy Container
         pool:
           name: $(agentPool)
+        environment: 'main'
         strategy:
           runOnce:
             deploy:
