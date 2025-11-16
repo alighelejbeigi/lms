@@ -31,6 +31,7 @@ Future<void> init() async {
     ),
   );
   //this is test for link
+  //this new for test azure pipeline
   // Domain layer (Use Cases)
   sl.registerLazySingleton(() => RequestAuth(sl()));
   sl.registerLazySingleton(() => VerifyAuth(sl()));
