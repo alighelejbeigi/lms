@@ -5,7 +5,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
-import 'package:tflite_flutter/tflite_flutter.dart';
+//import 'package:tflite_flutter/tflite_flutter.dart';
 
 // ثابت‌هایی که معمولاً برای مدل‌های Face Recognition استفاده می‌شوند
 const int _inputSize = 112;
@@ -13,7 +13,7 @@ const int _outputSize =
     192; // اندازه بردار ویژگی خروجی مدل (مثلاً MobileFaceNet)
 
 class FaceRecognizer {
-  late Interpreter _interpreter;
+  //late Interpreter _interpreter;
   // FIX 1: به‌روزرسانی مسیر مدل به .map طبق درخواست شما
   static const String _modelPath = 'assets/mobilefacenet.tflite';
 
@@ -27,10 +27,10 @@ class FaceRecognizer {
   Future<void> loadModel() async {
     try {
       final modelData = await rootBundle.load(_modelPath);
-      final interpreter = Interpreter.fromBuffer(
+      /*final interpreter = Interpreter.fromBuffer(
         modelData.buffer.asUint8List(),
       );
-      _interpreter = interpreter;
+      _interpreter = interpreter;*/
       print('TFLite model loaded successfully from assets: $_modelPath');
     } catch (e) {
       print('Failed to load TFLite model: $e');
@@ -98,7 +98,7 @@ class FaceRecognizer {
       // اجرای مدل
       // FIX 2: اصلاح شکل ورودی (Input Shape). با قرار دادن inputTensor در یک لیست،
       // بُعد Batch Size (اندازه 1) به درستی به مدل ارسال می‌شود.
-      _interpreter.run([inputTensor], outputMap);
+      //_interpreter.run([inputTensor], outputMap);
 
       return outputBuffer.toList(growable: false);
     } catch (e) {
@@ -132,6 +132,6 @@ class FaceRecognizer {
 
   /// آزادسازی منابع (اختیاری)
   void close() {
-    _interpreter.close();
+    //_interpreter.close();
   }
 }

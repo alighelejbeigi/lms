@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:lms/api_client.dart';
 
 import '../features/auth/presentation/pages/login_page.dart';
 import '../features/auth/presentation/pages/success_page.dart';
@@ -16,7 +15,7 @@ class AppRoutes {
 
 final GoRouter router = GoRouter(
   // مسیر اولیه هنگام راه‌اندازی برنامه
-  initialLocation: AppRoutes.login,
+  initialLocation: AppRoutes.successPage,
 
   routes: [
     GoRoute(
@@ -40,7 +39,7 @@ final GoRouter router = GoRouter(
     // در سطح زیرساخت (storage) بهترین روش برای GoRouter در زمان راه‌اندازی است.
 
     // اگرچه GetX در main.dart تزریق شده است، ما به چک کردن storage ادامه می‌دهیم
-    final token = await ApiClient.instance.storage.read(
+    /* final token = await ApiClient.instance.storage.read(
       key: ApiClient.TOKEN_KEY,
     );
 
@@ -56,7 +55,7 @@ final GoRouter router = GoRouter(
       return AppRoutes.whoami;
     }
 
-    return null;
+    return null;*/
   },
 
   // لیست خطا (اختیاری)
