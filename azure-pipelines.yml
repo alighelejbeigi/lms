@@ -1,24 +1,22 @@
 trigger:
   - main
-  - dev # 💡 Pipeline برای هر دو شاخه main و dev اجرا می‌شود
+  - dev
 
 variables:
   # 🔑 متغیرهای دسترسی و نام‌گذاری
   githubUserName: 'alighelejbeigi'
   githubRepoName: 'lms'
   imageRepository: 'flutter-web-app'
-  dockerLocalPort: 8080 # پورت دسترسی به اپلیکیشن در ویندوز سرور
+  dockerLocalPort: 8080
   tag: '$(Build.BuildId)'
   agentPool: 'avid'
 
 stages:
   # =================================================================
-  # STAGE 1: Git Mirroring (فقط برای شاخه main)
+  # STAGE 1: Git Mirroring (برای هر دو شاخه main و dev)
   # =================================================================
   - stage: MirrorCode
-    displayName: 1. Mirror Code to GitHub (Main Branch)
-    # 💡 شرط: این Stage فقط زمانی اجرا می‌شود که شاخه سورس، main باشد.
-    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    displayName: 1. Mirror Code to GitHub (Main & Dev)
 
     jobs:
       - job: Mirror
@@ -30,20 +28,25 @@ stages:
           - script: |
               echo "Starting Git Mirroring in Bash..."
               
-              # 1. ساخت URL ریموت با PAT (از متغیر Secret Pipeline)
+              # 1. ساخت URL ریموت با PAT 
               GITHUB_URL="https://$(githubUserName):${GITHUB_PAT_SECRET}@github.com/$(githubUserName)/$(githubRepoName).git"
               
               # 2. حذف ریموت قبلی و افزودن ریموت جدید
               git remote remove github-mirror 2>/dev/null || true
               git remote add github-mirror $GITHUB_URL
               
-              # 3. Push کردن شاخه‌های main و dev (اینجا main است)
+              # 3. Push کردن شاخه main
+              echo "Pushing main branch..."
               git push github-mirror main:main --force
               
-              echo "Mirroring of main branch completed."
-            displayName: Push Main Branch to GitHub
+              # 4. Push کردن شاخه dev (ایجاد/بروزرسانی dev در GitHub)
+              echo "Pushing dev branch..."
+              git push github-mirror dev:dev --force
+              
+              echo "Mirroring completed for main and dev branches."
+            displayName: Push Selected Branches to GitHub
             env:
-              GITHUB_PAT_SECRET: $(GitHubPAT) # 💡 تزریق PAT
+              GITHUB_PAT_SECRET: $(GitHubPAT)
 
   # =================================================================
   # STAGE 2: Docker Build and Deploy (فقط برای شاخه dev)
@@ -59,7 +62,7 @@ stages:
         pool:
           name: $(agentPool)
 
-        environment: 'dev' # Environment قبلی که ساختید
+        environment: 'LocalDevOps'
         strategy:
           runOnce:
             deploy:
@@ -68,7 +71,7 @@ stages:
                 - checkout: self
                   displayName: Checkout Source Code
 
-                # 2. Build کردن Docker Image (با Dockerfile چند مرحله‌ای)
+                # 2. Build کردن Docker Image
                 - task: Docker@2
                   displayName: Build Flutter Web Image
                   inputs:
@@ -84,7 +87,6 @@ stages:
                     docker rm $(imageRepository) || true
                     
                     echo "Deploying new container on host port $(dockerLocalPort)..."
-                    # اجرای کانتینر جدید: مپ کردن پورت 8080 سرور به پورت 80 کانتینر (Nginx)
                     docker run -d -p $(dockerLocalPort):80 --name $(imageRepository) $(imageRepository):$(tag)
                   displayName: Run Docker Container on Local Server
 
