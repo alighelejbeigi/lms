@@ -1,56 +1,46 @@
 trigger:
-  - main
+  - main # این Pipeline با هر Push به شاخه main اجرا می‌شود
 
 variables:
-  imageRepository: 'flutter-web-app'
-  dockerLocalPort: 8080 # پورت دسترسی از سرور
-  tag: '$(Build.BuildId)'
+  # 💡 این مقادیر را با اطلاعات GitHub خود جایگزین کنید
+  githubUserName: 'alighelejbeigi'
+  githubRepoName: 'lms'
+
+  # نام Agent Pool محلی شما
   agentPool: 'avid'
 
 stages:
-  - stage: BuildImage
-    displayName: 1. Build Docker Image
+  - stage: MirrorCode
+    displayName: Mirror Azure DevOps Repo to GitHub
     jobs:
-      - job: Build
-        displayName: Build Flutter Web Image
+      - job: Mirror
+        displayName: Push Mirror
         pool:
           name: $(agentPool)
 
         steps:
-          - checkout: self # مطمئن شوید که سورس کد را دانلود می‌کند
+          # 📢 گام ۱: استفاده از PAT به عنوان متغیر محیطی در اسکریپت
+          # PAT قبلاً به عنوان یک Secret Variable در تنظیمات Pipeline ذخیره شده است: $(GitHubPAT)
 
-          - task: Docker@2
-            displayName: Build the image
-            inputs:
-              command: build
-              # 💡 این مسیر اکنون باید Dockerfile را در ریشه پروژه پیدا کند
-              dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
-              tags: |
-                $(imageRepository):$(tag)
-
-  - stage: DeployContainer
-    displayName: 2. Deploy to Local Server
-    jobs:
-      - deployment: DeploymentJob
-        displayName: Deploy Container
-        pool:
-          name: $(agentPool)
-        environment: 'main'
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                # اجرای دستورات Docker در Agent محلی
-                - script: |
-                    echo "Stopping and removing old container..."
-                    docker stop $(imageRepository) || true
-                    docker rm $(imageRepository) || true
-                    
-                    echo "Running new container on port $(dockerLocalPort)..."
-                    # اجرای کانتینر جدید: مپ کردن پورت 8080 سرور به پورت 80 کانتینر
-                    docker run -d -p $(dockerLocalPort):80 --name $(imageRepository) $(imageRepository):$(tag)
-                  displayName: Run Docker Container
-
-                - script: |
-                    echo "Deployment successful! Check http://$(Agent.MachineName):$(dockerLocalPort)"
-                  displayName: Finalize Deployment
+          - script: |
+              echo "Mirroring local repository to GitHub..."
+              
+              # 1. تنظیم URL ریموت با استفاده از PAT برای احراز هویت
+              # از متغیرهای GitHubUserName و GitHubPAT استفاده می‌کند
+              GITHUB_URL="https://$(githubUserName):$(GitHubPAT)@github.com/$(githubUserName)/$(githubRepoName).git"
+              
+              # 2. حذف ریموت قبلی (در صورت وجود)
+              git remote remove github-mirror || true
+              
+              # 3. افزودن ریموت جدید
+              git remote add github-mirror $GITHUB_URL
+              
+              # 4. Mirror کردن (Pushing all branches and tags)
+              # --mirror=push تمام شاخه‌ها و تگ‌ها را به صورت Mirror به GitHub Push می‌کند
+              git push github-mirror --mirror --force
+              
+              echo "Mirroring complete. Check https://github.com/$(githubUserName)/$(githubRepoName)"
+            displayName: Execute Git Mirror Push
+            # 💡 تزریق متغیر Secret به عنوان متغیر محیطی (Environment Variable)
+            env:
+              GitHubPAT: $(GitHubPAT) # این متغیر Secret از Pipeline می‌آید
