@@ -1,40 +1,56 @@
 # Stage 1: Build the Flutter application
-FROM cirrusci/flutter:stable AS build
+FROM ghcr.io/cirruslabs/flutter:latest AS build
+
 WORKDIR /app
 
-# 💡 تنظیم Mirror Links
+# 💡 تنظیم Mirror Links برای دانلود سریع‌تر از چین
 ENV PUB_HOSTED_URL=https://pub.flutter-io.cn
 ENV FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
 
-# 💡 به عنوان root کار می‌کنیم
+# 💡 اجرا به عنوان root برای دسترسی کامل
 USER root
 
-# Fix git ownership issue برای Flutter SDK
+# 💡 حل مشکل git ownership برای Flutter SDK
 RUN git config --global --add safe.directory /sdks/flutter
 
-# 💡 گام ۱: کپی فایل‌های وابستگی
+# 💡 نمایش نسخه Flutter و Dart برای اطمینان
+RUN flutter --version && dart --version
+
+# 💡 گام ۱: کپی فایل‌های وابستگی (برای بهره‌گیری از Docker cache)
 COPY pubspec.yaml pubspec.lock ./
 
 # 💡 گام ۲: دانلود وابستگی‌ها
 RUN flutter pub get
 
-# 💡 گام ۳: کپی کردن بقیه سورس کد
+# 💡 گام ۳: کپی کردن تمام سورس کد
 COPY . .
 
-# فعال کردن بیلد وب
+# 💡 فعال کردن پلتفرم وب
 RUN flutter config --enable-web
 
-# گرفتن بیلد نهایی برای وب
-RUN flutter build web --release
+# 💡 گام ۴: بیلد گرفتن از اپلیکیشن برای وب
+RUN flutter build web --release --web-renderer canvaskit
 
-# Stage 2: Create a minimal Nginx server image
+# Stage 2: سرو کردن با Nginx
 FROM nginx:alpine
 
-# حذف محتوای پیش‌فرض Nginx
+# 💡 حذف فایل‌های پیش‌فرض Nginx
 RUN rm -rf /usr/share/nginx/html/*
 
-# کپی کردن خروجی بیلد Flutter Web
+# 💡 کپی کردن خروجی بیلد Flutter به Nginx
 COPY --from=build /app/build/web /usr/share/nginx/html
 
+# 💡 (اختیاری) اگر فایل کانفیگ سفارشی Nginx دارید
+# COPY nginx.conf /etc/nginx/nginx.conf
+
+# 💡 تنظیم مجوزهای صحیح
+RUN chown -R nginx:nginx /usr/share/nginx/html
+
+# 💡 سوییچ به کاربر nginx برای امنیت
+USER nginx
+
+# 💡 باز کردن پورت 80
 EXPOSE 80
+
+# 💡 اجرای Nginx
 CMD ["nginx", "-g", "daemon off;"]
