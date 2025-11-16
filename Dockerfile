@@ -7,23 +7,33 @@ WORKDIR /app
 ENV PUB_HOSTED_URL=https://pub.flutter-io.cn
 ENV FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
 
-# 💡 اجرا به عنوان root برای دسترسی کامل
+# 💡 اول به عنوان root برای تنظیمات اولیه
 USER root
 
 # 💡 حل مشکل git ownership برای Flutter SDK
 RUN git config --global --add safe.directory /sdks/flutter
 
-# 💡 نمایش نسخه Flutter و Dart برای اطمینان
+# 💡 ایجاد کاربر flutter و تنظیم مجوزها
+RUN if ! id flutter >/dev/null 2>&1; then \
+        addgroup -S flutter && adduser -S flutter -G flutter; \
+    fi && \
+    chown -R flutter:flutter /app && \
+    chown -R flutter:flutter /sdks/flutter 2>/dev/null || true
+
+# 💡 سوییچ به کاربر flutter
+USER flutter
+
+# 💡 نمایش نسخه Flutter و Dart
 RUN flutter --version && dart --version
 
-# 💡 گام ۱: کپی فایل‌های وابستگی (برای بهره‌گیری از Docker cache)
-COPY pubspec.yaml pubspec.lock ./
+# 💡 گام ۱: کپی فایل‌های وابستگی
+COPY --chown=flutter:flutter pubspec.yaml pubspec.lock ./
 
 # 💡 گام ۲: دانلود وابستگی‌ها
 RUN flutter pub get
 
 # 💡 گام ۳: کپی کردن تمام سورس کد
-COPY . .
+COPY --chown=flutter:flutter . .
 
 # 💡 فعال کردن پلتفرم وب
 RUN flutter config --enable-web
@@ -39,9 +49,6 @@ RUN rm -rf /usr/share/nginx/html/*
 
 # 💡 کپی کردن خروجی بیلد Flutter به Nginx
 COPY --from=build /app/build/web /usr/share/nginx/html
-
-# 💡 (اختیاری) اگر فایل کانفیگ سفارشی Nginx دارید
-# COPY nginx.conf /etc/nginx/nginx.conf
 
 # 💡 تنظیم مجوزهای صحیح
 RUN chown -R nginx:nginx /usr/share/nginx/html
