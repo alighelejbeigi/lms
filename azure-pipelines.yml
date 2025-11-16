@@ -27,7 +27,7 @@ stages:
         steps:
           - script: |
               echo "Starting Git Mirroring in Bash..."
-              
+              git config --global http.sslVerify false
               # 1. ساخت URL ریموت با PAT 
               GITHUB_URL="https://$(githubUserName):${GITHUB_PAT_SECRET}@github.com/$(githubUserName)/$(githubRepoName).git"
               
