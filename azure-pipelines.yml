@@ -2,50 +2,45 @@ trigger:
   - main
 
 variables:
-  # 💡 اطلاعات GitHub شما (حتما جایگزین شود)
+  # 💡 اطلاعات GitHub شما
   githubUserName: 'alighelejbeigi'
   githubRepoName: 'lms'
 
-  agentPool: 'avid'
+  agentPool: 'avid' # نام Agent Pool محلی شما
 
 stages:
   - stage: MirrorCode
-    displayName: Mirror Local Repository to GitHub
+    displayName: Mirror Repository to GitHub (WSL/Bash)
 
     jobs:
       - job: Mirror
         displayName: Execute Git Mirror Push
         pool:
-          name: $(agentPool)
+          name: $(agentPool) # استفاده از Agent محلی WSL/Ubuntu شما
 
         steps:
 
-          # 📢 گام ۱: اجرای اسکریپت برای Push کردن با PAT (که از تنظیمات Pipeline می‌آید)
-          - task: PowerShell@2
-            displayName: 'Push Mirror to GitHub'
-            inputs:
-              targetType: 'inline'
-              # 💡 در PowerShell، ما می‌توانیم متغیرهای Pipeline را به متغیرهای Shell تبدیل کنیم
-              script: |
-                Write-Host "Starting Git Mirroring..."
-                
-                # PAT را به صورت محلی در اسکریپت تعریف می‌کنیم (مقدار آن از متغیر مخفی تزریق می‌شود)
-                $GitHubToken = "$(GitHubPAT)"
-                $Username = "$(githubUserName)"
-                $RepoName = "$(githubRepoName)"
-                
-                $GitHubUrl = "https://$($Username):$($GitHubToken)@github.com/$($Username)/$($RepoName).git"
-                
-                # حذف ریموت قبلی (در صورت وجود)
-                git remote remove github-mirror 2>$null
-                
-                # افزودن ریموت جدید
-                git remote add github-mirror $GitHubUrl
-                
-                # Push کردن Mirror
-                git push github-mirror --mirror --force
-                
-                Write-Host "Mirroring successfully completed!"
-                Write-Host "Check your GitHub repository: https://github.com/$($Username)/$($RepoName)"
-
-              # 💡 از آنجا که ما متغیرهای Pipeline را مستقیماً در اسکریپت می‌خوانیم، نیازی به بخش env نیست.
+          # 📢 گام ۱: اجرای اسکریپت در Bash
+          - script: |
+              echo "Starting Git Mirroring in Bash..."
+              
+              # 1. تنظیم URL ریموت با استفاده از PAT تزریق شده
+              # ما PAT را به عنوان یک متغیر محیطی در دسترس Agent قرار می‌دهیم
+              # این متغیر Secret از بخش env در پایین اسکریپت می‌آید.
+              GITHUB_URL="https://$(githubUserName):${GITHUB_PAT_SECRET}@github.com/$(githubUserName)/$(githubRepoName).git"
+              
+              # 2. حذف ریموت قبلی (در صورت وجود)
+              git remote remove github-mirror 2>/dev/null || true
+              
+              # 3. افزودن ریموت جدید
+              git remote add github-mirror $GITHUB_URL
+              
+              # 4. Push کردن Mirror
+              # --mirror: تمام شاخه‌ها و تگ‌ها را منعکس می‌کند.
+              git push github-mirror --mirror --force
+              
+              echo "Mirroring successfully completed!"
+            displayName: Push Mirror to GitHub via Bash
+            # 💡 مهم: تزریق متغیر Secret از Pipeline به متغیر محیطی Shell
+            env:
+              GITHUB_PAT_SECRET: $(GitHubPAT) # نام متغیر Secret در Pipeline شما
