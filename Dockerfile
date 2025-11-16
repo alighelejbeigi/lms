@@ -7,7 +7,7 @@ ENV PUB_HOSTED_URL=https://pub.flutter-io.cn
 ENV FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
 
 # کپی فایل‌های pubspec برای caching بهتر
-COPY pubspec.yaml pubspec.lock ./
+COPY . .
 # دانلود وابستگی‌ها (اکنون از Mirror Link استفاده می‌شود)
 RUN flutter pub get
 
