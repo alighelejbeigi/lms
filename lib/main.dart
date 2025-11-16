@@ -14,7 +14,6 @@ void main() async {
 
   di.init(); // اجرای تزریق وابستگی
 
-  // NEW: بارگذاری مدل TFLite به صورت همزمان (Awaited) قبل از اجرای برنامه
   try {
     // از GetIt برای گرفتن نمونه FaceRecognizer استفاده کنید
     await GetIt.instance.get<FaceRecognizer>().loadModel();
