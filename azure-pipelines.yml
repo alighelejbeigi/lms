@@ -1,96 +1,52 @@
 trigger:
   - main
-  - dev
+  - dev # 💡 Pipeline با Push به dev هم اجرا می‌شود
 
 variables:
-  # 🔑 متغیرهای دسترسی و نام‌گذاری
+  # 💡 اطلاعات GitHub شما
   githubUserName: 'alighelejbeigi'
   githubRepoName: 'lms'
-  imageRepository: 'flutter-web-app'
-  dockerLocalPort: 8080
-  tag: '$(Build.BuildId)'
-  agentPool: 'avid'
 
-stages:
-  # =================================================================
-  # STAGE 1: Git Mirroring (برای هر دو شاخه main و dev)
-  # =================================================================
-  - stage: MirrorCode
-    displayName: 1. Mirror Code to GitHub (Main & Dev)
+  agentPool: 'avid' # نام Agent Pool محلی شما
 
-    jobs:
-      - job: Mirror
-        displayName: Git Push Mirror
-        pool:
-          name: $(agentPool)
+steps:
+  - checkout: self # 💡 گام ۱: Checkout کد (موفق)
 
-        steps:
-          - script: |
-              echo "Starting Git Mirroring in Bash..."
-              git config --global http.sslVerify false
-              # 1. ساخت URL ریموت با PAT 
-              GITHUB_URL="https://$(githubUserName):${GITHUB_PAT_SECRET}@github.com/$(githubUserName)/$(githubRepoName).git"
-              
-              # 2. حذف ریموت قبلی و افزودن ریموت جدید
-              git remote remove github-mirror 2>/dev/null || true
-              git remote add github-mirror $GITHUB_URL
-              
-              # 3. Push کردن شاخه main
-              echo "Pushing main branch..."
-              git push github-mirror main:main --force
-              
-              # 4. Push کردن شاخه dev (ایجاد/بروزرسانی dev در GitHub)
-              echo "Pushing dev branch..."
-              git push github-mirror dev:dev --force
-              
-              echo "Mirroring completed for main and dev branches."
-            displayName: Push Selected Branches to GitHub
-            env:
-              GITHUB_PAT_SECRET: $(GitHubPAT)
+  # 📢 گام ۲: ساختن شاخه‌های محلی (جدید)
+  - script: |
+      echo "Creating local branches for push..."
+      
+      # ساختن شاخه محلی main از ریموت origin/main
+      git checkout main
+      
+      # ساختن شاخه محلی dev از ریموت origin/dev (اگر وجود داشته باشد)
+      # git fetch تمام شاخه‌ها را به صورت origin/dev می‌آورد.
+      # این دستور در صورت وجود origin/dev آن را checkout می‌کند.
+      git checkout dev 2>/dev/null || true 
+      
+      echo "Local branches created."
+    displayName: Create Local Branches for Mirroring
+    condition: succeeded()
 
-  # =================================================================
-  # STAGE 2: Docker Build and Deploy (فقط برای شاخه dev)
-  # =================================================================
-  - stage: DockerDeploy
-    displayName: 2. Flutter Web Deploy (Dev Branch)
-    # 💡 شرط: این Stage فقط زمانی اجرا می‌شود که شاخه سورس، dev باشد.
-    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/dev'))
-
-    jobs:
-      - deployment: DeployContainer
-        displayName: Build & Run Container
-        pool:
-          name: $(agentPool)
-
-        environment: 'dev'
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                # 1. Checkout کد در Agent
-                - checkout: self
-                  displayName: Checkout Source Code
-
-                # 2. Build کردن Docker Image
-                - task: Docker@2
-                  displayName: Build Flutter Web Image
-                  inputs:
-                    command: build
-                    dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
-                    tags: |
-                      $(imageRepository):$(tag)
-
-                # 3. Deploy کردن کانتینر
-                - script: |
-                    echo "Stopping and removing old container (if exists)..."
-                    docker stop $(imageRepository) || true
-                    docker rm $(imageRepository) || true
-                    
-                    echo "Deploying new container on host port $(dockerLocalPort)..."
-                    docker run -d -p $(dockerLocalPort):80 --name $(imageRepository) $(imageRepository):$(tag)
-                  displayName: Run Docker Container on Local Server
-
-                - script: |
-                    echo "Deployment successful!"
-                    echo "Access your app locally via: https://$(Agent.MachineName):$(dockerLocalPort)"
-                  displayName: Finalize Deployment Check
+  # 📢 گام ۳: Push کردن (گام اصلی)
+  - script: |
+      echo "Starting controlled branch push (main and dev)..."
+      
+      # 1. ساخت URL ریموت با استفاده از PAT تزریق شده
+      GITHUB_URL="https://$(githubUserName):${GITHUB_PAT_SECRET}@github.com/$(githubUserName)/$(githubRepoName).git"
+      
+      # 2. حذف ریموت قبلی و افزودن ریموت جدید
+      git remote remove github-mirror 2>/dev/null || true
+      git remote add github-mirror $GITHUB_URL
+      
+      # 3. Push کردن شاخه‌ها
+      # Push کردن main:main
+      git push github-mirror main:main --force
+      
+      # Push کردن dev:dev (اگر شاخه dev وجود داشته باشد)
+      git push github-mirror dev:dev --force
+      
+      echo "Push completed for main and dev branches."
+    displayName: Push Specific Branches via Bash
+    env:
+      GITHUB_PAT_SECRET: $(GitHubPAT)
