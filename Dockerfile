@@ -1,63 +1,47 @@
-# Stage 1: Build the Flutter application
+# Stage 1: Build Flutter Web App
 FROM ghcr.io/cirruslabs/flutter:latest AS build
 
 WORKDIR /app
 
-# 💡 تنظیم Mirror Links برای دانلود سریع‌تر از چین
+# Environment variables for Flutter
 ENV PUB_HOSTED_URL=https://pub.flutter-io.cn
 ENV FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
+ENV FLUTTER_SUPPRESS_ROOT_WARNING=1
 
-# 💡 اول به عنوان root برای تنظیمات اولیه
+# Run as root and fix git ownership
 USER root
-
-# 💡 حل مشکل git ownership برای Flutter SDK
 RUN git config --global --add safe.directory /sdks/flutter
 
-# 💡 ایجاد کاربر flutter و تنظیم مجوزها
-RUN if ! id flutter >/dev/null 2>&1; then \
-        addgroup -S flutter && adduser -S flutter -G flutter; \
-    fi && \
-    chown -R flutter:flutter /app && \
-    chown -R flutter:flutter /sdks/flutter 2>/dev/null || true
+# Show Flutter version
+RUN flutter --version
 
-# 💡 سوییچ به کاربر flutter
-USER flutter
+# Copy dependency files
+COPY pubspec.yaml pubspec.lock ./
 
-# 💡 نمایش نسخه Flutter و Dart
-RUN flutter --version && dart --version
-
-# 💡 گام ۱: کپی فایل‌های وابستگی
-COPY --chown=flutter:flutter pubspec.yaml pubspec.lock ./
-
-# 💡 گام ۲: دانلود وابستگی‌ها
+# Get dependencies
 RUN flutter pub get
 
-# 💡 گام ۳: کپی کردن تمام سورس کد
-COPY --chown=flutter:flutter . .
+# Copy source code
+COPY . .
 
-# 💡 فعال کردن پلتفرم وب
-RUN flutter config --enable-web
+# Build web app
+RUN flutter build web --release
 
-# 💡 گام ۴: بیلد گرفتن از اپلیکیشن برای وب
-RUN flutter build web --release --web-renderer canvaskit
-
-# Stage 2: سرو کردن با Nginx
+# Stage 2: Serve with Nginx
 FROM nginx:alpine
 
-# 💡 حذف فایل‌های پیش‌فرض Nginx
+# Remove default nginx content
 RUN rm -rf /usr/share/nginx/html/*
 
-# 💡 کپی کردن خروجی بیلد Flutter به Nginx
+# Copy Flutter web build
 COPY --from=build /app/build/web /usr/share/nginx/html
 
-# 💡 تنظیم مجوزهای صحیح
+# Set proper permissions
 RUN chown -R nginx:nginx /usr/share/nginx/html
 
-# 💡 سوییچ به کاربر nginx برای امنیت
+# Run as nginx user
 USER nginx
 
-# 💡 باز کردن پورت 80
 EXPOSE 80
 
-# 💡 اجرای Nginx
 CMD ["nginx", "-g", "daemon off;"]
