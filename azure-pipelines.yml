@@ -3,7 +3,6 @@ trigger:
   - dev
 
 variables:
-  # ... (متغیرها بدون تغییر)
   githubUserName: 'alighelejbeigi'
   githubRepoName: 'lms'
   imageRepository: 'flutter-web-app'
@@ -25,53 +24,37 @@ stages:
           name: $(agentPool)
 
         steps:
-          # 📢 گام ۱: Checkout کد (موفقیت‌آمیز در لاگ قبلی)
           - checkout: self
             displayName: Checkout Source Code
 
-          # 📢 گام ۲: ساختن شاخه‌های محلی از روی origin/
           - script: |
               echo "Ensuring local branches exist..."
-              
-              # 💡 ایجاد شاخه محلی main از origin/main
               git branch -f main origin/main
-              
-              # 💡 ایجاد شاخه محلی dev از origin/dev
               git branch -f dev origin/dev
-              
-              # 💡 سوییچ به شاخه main (اختیاری)
               git checkout main
-              
               echo "Local branches main/dev are ready."
             displayName: Create Local Branches
             condition: succeeded()
 
-          # 📢 گام ۳: Push کردن Mirror (استفاده از شاخه‌های محلی جدید)
           - script: |
               echo "Starting Git Push..."
               git config --global http.sslVerify false
-              # 1. ساخت URL ریموت با PAT 
               GITHUB_URL="https://$(githubUserName):${GITHUB_PAT_SECRET}@github.com/$(githubUserName)/$(githubRepoName).git"
-              
-              # 2. حذف ریموت قبلی و افزودن ریموت جدید
               git remote remove github-mirror 2>/dev/null || true
               git remote add github-mirror $GITHUB_URL
-              
-              # 3. Push کردن شاخه‌های محلی به ریموت
               echo "Pushing main:main and dev:dev..."
               git push github-mirror main:main --force
               git push github-mirror dev:dev --force
-              
               echo "Mirroring completed."
             displayName: Push Specific Branches to GitHub
             env:
               GITHUB_PAT_SECRET: $(GitHubPAT)
+
   # =================================================================
   # STAGE 2: Docker Build and Deploy (فقط برای شاخه dev)
   # =================================================================
   - stage: DockerDeploy
     displayName: 2. Flutter Web Deploy (Dev Branch)
-    # 💡 شرط: این Stage فقط زمانی اجرا می‌شود که شاخه سورس، dev باشد.
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/dev'))
 
     jobs:
@@ -85,11 +68,17 @@ stages:
           runOnce:
             deploy:
               steps:
-                # 1. Checkout کد در Agent
                 - checkout: self
                   displayName: Checkout Source Code
 
-                # 2. Build کردن Docker Image
+                # 🔧 پاک کردن Docker cache قدیمی (اختیاری)
+                - script: |
+                    echo "Cleaning old Docker resources..."
+                    docker system prune -f || true
+                  displayName: Clean Docker Cache
+                  continueOnError: true
+
+                # 🔧 Build با نمایش لاگ کامل
                 - task: Docker@2
                   displayName: Build Flutter Web Image
                   inputs:
@@ -97,18 +86,48 @@ stages:
                     dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
                     tags: |
                       $(imageRepository):$(tag)
+                      $(imageRepository):latest
+                    arguments: '--no-cache --progress=plain'
 
-                # 3. Deploy کردن کانتینر
+                # 🔧 بررسی موفقیت Build
+                - script: |
+                    echo "Verifying Docker image..."
+                    docker images | grep $(imageRepository)
+                  displayName: Verify Docker Image
+
+                # 🔧 Deploy کردن کانتینر
                 - script: |
                     echo "Stopping and removing old container (if exists)..."
                     docker stop $(imageRepository) || true
                     docker rm $(imageRepository) || true
                     
                     echo "Deploying new container on host port $(dockerLocalPort)..."
-                    docker run -d -p $(dockerLocalPort):80 --name $(imageRepository) $(imageRepository):$(tag)
+                    docker run -d \
+                      -p $(dockerLocalPort):80 \
+                      --name $(imageRepository) \
+                      --restart unless-stopped \
+                      $(imageRepository):$(tag)
+                    
+                    echo "Waiting for container to start..."
+                    sleep 5
+                    
+                    echo "Checking container status..."
+                    docker ps | grep $(imageRepository)
                   displayName: Run Docker Container on Local Server
 
+                # 🔧 تست Health Check
                 - script: |
-                    echo "Deployment successful!"
-                    echo "Access your app locally via: https://$(Agent.MachineName):$(dockerLocalPort)"
+                    echo "Testing application endpoint..."
+                    curl -f http://localhost:$(dockerLocalPort) || echo "Warning: App not responding yet"
+                    
+                    echo "Container logs:"
+                    docker logs $(imageRepository) --tail 50
+                  displayName: Health Check & Show Logs
+                  continueOnError: true
+
+                - script: |
+                    echo "✅ Deployment successful!"
+                    echo "📱 Access your app at: http://$(Agent.MachineName):$(dockerLocalPort)"
+                    echo "🐳 Container name: $(imageRepository)"
+                    echo "🏷️  Image tag: $(tag)"
                   displayName: Finalize Deployment Check
