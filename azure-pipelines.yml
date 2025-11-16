@@ -62,7 +62,7 @@ stages:
         pool:
           name: $(agentPool)
 
-        environment: 'LocalDevOps'
+        environment: 'dev'
         strategy:
           runOnce:
             deploy:
