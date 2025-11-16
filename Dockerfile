@@ -6,22 +6,28 @@ WORKDIR /app
 ENV PUB_HOSTED_URL=https://pub.flutter-io.cn
 ENV FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
 
-# 💡 گام جدید: ایجاد کاربر غیر root برای اجرای Flutter
-RUN groupadd -r flutter && useradd -r -g flutter -m flutter
-RUN chown -R flutter:flutter /app
+# 💡 اول به عنوان root اجرا می‌کنیم تا مشکل ownership را حل کنیم
+USER root
+
+# Fix git ownership issue برای Flutter SDK
+RUN git config --global --add safe.directory /sdks/flutter
+
+# 💡 ایجاد کاربر غیر root و تنظیم مجوزها
+RUN groupadd -r flutter && useradd -r -g flutter -m flutter && \
+    chown -R flutter:flutter /app && \
+    chown -R flutter:flutter /sdks/flutter
+
+# حالا به کاربر flutter سوییچ می‌کنیم
 USER flutter
 
-# 💡 گام ۱: کپی فایل‌های اصلی برای Caching
-COPY pubspec.yaml pubspec.lock ./
+# 💡 گام ۱: کپی فایل‌های وابستگی با ownership صحیح
+COPY --chown=flutter:flutter pubspec.yaml pubspec.lock ./
 
 # 💡 گام ۲: دانلود وابستگی‌ها
-# اگر در این مرحله شکست بخوریم، مشکل از وابستگی‌ها یا کانفیگ آینه‌هاست.
-# ما از git config برای دور زدن مشکلات SSL استفاده نمی‌کنیم چون pub get خودش باید هندل کند.
-# اگر pub get شکست خورد، خروجی verbose را باید دقیقاً ببینیم.
 RUN flutter pub get
 
-# 💡 گام ۳: کپی کردن بقیه سورس کد (بعد از pub get برای Caching بهتر)
-COPY . .
+# 💡 گام ۳: کپی کردن بقیه سورس کد
+COPY --chown=flutter:flutter . .
 
 # فعال کردن بیلد وب
 RUN flutter config --enable-web
@@ -31,20 +37,24 @@ RUN flutter build web --release
 
 # Stage 2: Create a minimal Nginx server image
 FROM nginx:alpine
-# 💡 Nginx setup is run as root by default, so we revert user for security/cleanup
+
+# 💡 همه کارها را به عنوان root انجام می‌دهیم
 USER root
-COPY default.conf /etc/nginx/conf.d/default.conf
-RUN rm /etc/nginx/conf.d/default.conf
 
-# تنظیم مجوزها و سوییچ به کاربر non-root Nginx
-RUN chown -R nginx:nginx /usr/share/nginx/html
-USER nginx
-
-# حذف محتوای پیش‌فرض Nginx
+# حذف محتوای پیش‌فرض Nginx (قبل از کپی کردن فایل‌های جدید)
 RUN rm -rf /usr/share/nginx/html/*
 
-# کپی کردن خروجی بیلد Flutter Web به پوشه Nginx
+# کپی کردن خروجی بیلد Flutter Web
 COPY --from=build /app/build/web /usr/share/nginx/html
+
+# تنظیم مجوزها
+RUN chown -R nginx:nginx /usr/share/nginx/html
+
+# اگر فایل default.conf دارید، اینجا کپی کنید
+# COPY default.conf /etc/nginx/conf.d/default.conf
+
+# سوییچ به کاربر nginx برای امنیت بیشتر
+USER nginx
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
