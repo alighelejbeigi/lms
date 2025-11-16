@@ -59,7 +59,7 @@ stages:
         pool:
           name: $(agentPool)
 
-        environment: 'LocalDevOps' # Environment قبلی که ساختید
+        environment: 'dev' # Environment قبلی که ساختید
         strategy:
           runOnce:
             deploy:
