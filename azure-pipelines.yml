@@ -6,171 +6,88 @@ variables:
   githubUserName: 'alighelejbeigi'
   githubRepoName: 'lms'
   imageRepository: 'flutter-web-app'
-  dockerLocalPort: 8080
+  dockerLocalPort: 8090  # 👈 Port جدید
+  serverIP: '192.168.192.165'  # 👈 IP سرور
   tag: '$(Build.BuildId)'
   agentPool: 'avid'
 
 stages:
-  # =================================================================
-  # STAGE 1: Git Mirroring (Main & Dev)
-  # =================================================================
   - stage: MirrorCode
-    displayName: 1. Mirror Code to GitHub (Main & Dev)
-
+    displayName: 1. Mirror Code to GitHub
     jobs:
       - job: Mirror
         displayName: Git Push Mirror
         pool:
           name: $(agentPool)
-
         steps:
           - checkout: self
-            displayName: Checkout Source Code
-
           - script: |
-              echo "Ensuring local branches exist..."
               git branch -f main origin/main
               git branch -f dev origin/dev
               git checkout main
-              echo "Local branches main/dev are ready."
             displayName: Create Local Branches
-            condition: succeeded()
-
           - script: |
-              echo "Starting Git Push..."
               git config --global http.sslVerify false
               GITHUB_URL="https://$(githubUserName):${GITHUB_PAT_SECRET}@github.com/$(githubUserName)/$(githubRepoName).git"
               git remote remove github-mirror 2>/dev/null || true
               git remote add github-mirror $GITHUB_URL
-              echo "Pushing main:main and dev:dev..."
               git push github-mirror main:main --force
               git push github-mirror dev:dev --force
-              echo "Mirroring completed."
-            displayName: Push Specific Branches to GitHub
+            displayName: Push to GitHub
             env:
               GITHUB_PAT_SECRET: $(GitHubPAT)
 
-  # =================================================================
-  # STAGE 2: Docker Build and Deploy (فقط برای شاخه dev)
-  # =================================================================
   - stage: DockerDeploy
-    displayName: 2. Flutter Web Deploy (Dev Branch)
+    displayName: 2. Flutter Web Deploy
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/dev'))
-
     jobs:
       - deployment: DeployContainer
-        displayName: Build & Run Container
+        displayName: Build & Deploy
         pool:
           name: $(agentPool)
-
         environment: 'dev'
         strategy:
           runOnce:
             deploy:
               steps:
                 - checkout: self
-                  displayName: Checkout Source Code
 
-                # 🔧 Build Docker Image
                 - script: |
-                    echo "=== Starting Docker Build ==="
-                    cd $(Build.SourcesDirectory)
-                    
                     docker build \
                       --progress=plain \
                       --tag $(imageRepository):$(tag) \
                       --tag $(imageRepository):latest \
-                      --file Dockerfile \
                       .
-                    
-                    if [ $? -eq 0 ]; then
-                      echo "✅ Docker build completed successfully"
-                    else
-                      echo "##[error]Docker build failed!"
-                      exit 1
-                    fi
                   displayName: Build Docker Image
                   timeoutInMinutes: 30
 
-                # 🔧 بررسی Image (اصلاح شده)
                 - script: |
-                    echo "=== Verifying Docker Image ==="
-                    echo "Looking for image: $(imageRepository):$(tag)"
-                    echo ""
-                    echo "All Docker images:"
-                    docker images
-                    echo ""
+                    docker stop $(imageRepository) 2>/dev/null || true
+                    docker rm $(imageRepository) 2>/dev/null || true
                     
-                    # بررسی با docker inspect که دقیق‌تر است
-                    if docker inspect $(imageRepository):$(tag) >/dev/null 2>&1; then
-                      echo "✅ Image verified: $(imageRepository):$(tag)"
-                      docker images $(imageRepository):$(tag)
-                    else
-                      echo "##[error]Image not found: $(imageRepository):$(tag)"
-                      exit 1
-                    fi
-                  displayName: Verify Docker Image
-
-                # 🔧 Deploy Container
-                - script: |
-                    echo "=== Stopping old container ==="
-                    docker stop $(imageRepository) 2>/dev/null || echo "No old container"
-                    docker rm $(imageRepository) 2>/dev/null || echo "No old container to remove"
-                    
-                    echo "=== Starting new container ==="
                     docker run -d \
                       -p $(dockerLocalPort):80 \
                       --name $(imageRepository) \
                       --restart unless-stopped \
                       $(imageRepository):$(tag)
                     
-                    echo "=== Waiting for container ==="
                     sleep 5
-                    
-                    if docker ps | grep $(imageRepository) >/dev/null 2>&1; then
-                      echo "✅ Container is running"
-                      docker ps --filter "name=$(imageRepository)"
-                    else
-                      echo "##[error]Container failed to start"
-                      docker logs $(imageRepository) 2>&1 || true
-                      exit 1
-                    fi
+                    docker ps --filter "name=$(imageRepository)"
                   displayName: Deploy Container
 
-                # 🔧 Health Check
-                - script: |
-                    echo "=== Testing Application ==="
-                    
-                    for i in {1..10}; do
-                      if curl -f -s http://localhost:$(dockerLocalPort) >/dev/null 2>&1; then
-                        echo "✅ Application is responding!"
-                        echo "Status Code:"
-                        curl -s -o /dev/null -w "%{http_code}" http://localhost:$(dockerLocalPort)
-                        echo ""
-                        break
-                      else
-                        echo "Attempt $i: Waiting for app..."
-                        sleep 3
-                      fi
-                    done
-                    
-                    echo ""
-                    echo "=== Recent Container Logs ==="
-                    docker logs $(imageRepository) --tail 20
-                  displayName: Health Check
-                  continueOnError: true
-
-                # 🎉 Summary
                 - script: |
                     echo "========================================"
                     echo "✅ DEPLOYMENT SUCCESSFUL!"
                     echo "========================================"
-                    echo "📱 URL: http://localhost:$(dockerLocalPort)"
+                    echo "📱 Local: http://localhost:$(dockerLocalPort)"
+                    echo "🌐 Network: http://$(serverIP):$(dockerLocalPort)"
                     echo "🐳 Container: $(imageRepository)"
                     echo "🏷️  Tag: $(tag)"
-                    echo "📊 Build: $(Build.BuildId)"
                     echo "========================================"
                     echo ""
-                    echo "Container Info:"
+                    echo "🔥 Access from any device in your network:"
+                    echo "   http://$(serverIP):$(dockerLocalPort)"
+                    echo ""
+                    echo "Container Status:"
                     docker ps --filter "name=$(imageRepository)" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-                  displayName: Deployment Summary
+                  displayName: Deployment Info
