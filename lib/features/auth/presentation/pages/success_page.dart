@@ -30,6 +30,12 @@ class SuccessPage extends StatelessWidget {
               textAlign: TextAlign.center,
               textDirection: TextDirection.rtl,
             ),
+            const Text(
+              'tets jadid pipeline bad az 1 roz ke dobare mikham push konam bebinim chi mishe ',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+              textDirection: TextDirection.rtl,
+            ),
             const SizedBox(height: 30),
             ElevatedButton(
               onPressed: () {
