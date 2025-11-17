@@ -119,43 +119,28 @@ stages:
                     fi
                   displayName: Deploy Container
 
-                # Network Testing
+                # Network Testing - با timeout
                 - script: |
                     echo "=== Network Binding Check ==="
-                    sudo ss -tlnp | grep $(dockerLocalPort)
+                    sudo ss -tlnp | grep $(dockerLocalPort) | head -2
                     
                     echo ""
-                    echo "=== Testing localhost ==="
-                    curl -f -s -o /dev/null -w "Localhost: %{http_code}\n" http://localhost:$(dockerLocalPort)
-                    
-                    echo ""
-                    echo "=== Testing IP address ==="
-                    curl -f -s -o /dev/null -w "IP Access: %{http_code}\n" http://$(serverIP):$(dockerLocalPort) || echo "⚠️  IP access failed - check firewall"
-                    
-                    echo ""
-                    echo "=== Container Logs ==="
-                    docker logs $(imageRepository) --tail 20
-                  displayName: Network Tests
+                    echo "=== Quick Test ==="
+                    curl -f -s -o /dev/null -w "HTTP: %{http_code}\n" --max-time 3 http://localhost:$(dockerLocalPort) || echo "Test failed/timeout"
+                  displayName: Quick Network Test
+                  timeoutInMinutes: 1
                   continueOnError: true
 
-                # Firewall Check & Setup
+                # Firewall Check - سریع‌تر
                 - script: |
-                    echo "=== Checking Firewall ==="
+                    echo "=== Firewall Status ==="
                     if command -v ufw >/dev/null 2>&1; then
-                      echo "UFW is installed"
-                      sudo ufw status | grep $(dockerLocalPort) || {
-                        echo "⚠️  Port $(dockerLocalPort) not open in firewall"
-                        echo "Run: sudo ufw allow $(dockerLocalPort)/tcp"
-                      }
+                      sudo ufw status | grep $(dockerLocalPort) || echo "Port not in firewall rules"
                     else
-                      echo "ℹ️  UFW not installed. Installing..."
-                      sudo apt update && sudo apt install ufw -y
-                      sudo ufw allow 22/tcp
-                      sudo ufw allow $(dockerLocalPort)/tcp
-                      sudo ufw --force enable
-                      echo "✅ UFW installed and configured"
+                      echo "UFW not installed"
                     fi
-                  displayName: Configure Firewall
+                  displayName: Check Firewall
+                  timeoutInMinutes: 1
                   continueOnError: true
 
                 # Deployment Summary
