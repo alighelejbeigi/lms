@@ -6,88 +6,173 @@ variables:
   githubUserName: 'alighelejbeigi'
   githubRepoName: 'lms'
   imageRepository: 'flutter-web-app'
-  dockerLocalPort: 8090  # 👈 Port جدید
-  serverIP: '192.168.192.165'  # 👈 IP سرور
+  dockerLocalPort: 8090
+  serverIP: '192.168.192.165'
   tag: '$(Build.BuildId)'
   agentPool: 'avid'
 
 stages:
+  # =================================================================
+  # STAGE 1: Git Mirroring (Main & Dev)
+  # =================================================================
   - stage: MirrorCode
-    displayName: 1. Mirror Code to GitHub
+    displayName: 1. Mirror Code to GitHub (Main & Dev)
+
     jobs:
       - job: Mirror
         displayName: Git Push Mirror
         pool:
           name: $(agentPool)
+
         steps:
           - checkout: self
+            displayName: Checkout Source Code
+
           - script: |
+              echo "Ensuring local branches exist..."
               git branch -f main origin/main
               git branch -f dev origin/dev
               git checkout main
+              echo "Local branches main/dev are ready."
             displayName: Create Local Branches
+            condition: succeeded()
+
           - script: |
+              echo "Starting Git Push..."
               git config --global http.sslVerify false
               GITHUB_URL="https://$(githubUserName):${GITHUB_PAT_SECRET}@github.com/$(githubUserName)/$(githubRepoName).git"
               git remote remove github-mirror 2>/dev/null || true
               git remote add github-mirror $GITHUB_URL
+              echo "Pushing main:main and dev:dev..."
               git push github-mirror main:main --force
               git push github-mirror dev:dev --force
-            displayName: Push to GitHub
+              echo "Mirroring completed."
+            displayName: Push Specific Branches to GitHub
             env:
               GITHUB_PAT_SECRET: $(GitHubPAT)
 
+  # =================================================================
+  # STAGE 2: Docker Build and Deploy (فقط برای شاخه dev)
+  # =================================================================
   - stage: DockerDeploy
-    displayName: 2. Flutter Web Deploy
+    displayName: 2. Flutter Web Deploy (Dev Branch)
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/dev'))
+
     jobs:
       - deployment: DeployContainer
-        displayName: Build & Deploy
+        displayName: Build & Run Container
         pool:
           name: $(agentPool)
+
         environment: 'dev'
         strategy:
           runOnce:
             deploy:
               steps:
                 - checkout: self
+                  displayName: Checkout Source Code
 
+                # Build Docker Image
                 - script: |
+                    echo "=== Starting Docker Build ==="
+                    cd $(Build.SourcesDirectory)
+                    
                     docker build \
                       --progress=plain \
                       --tag $(imageRepository):$(tag) \
                       --tag $(imageRepository):latest \
+                      --file Dockerfile \
                       .
+                    
+                    if [ $? -eq 0 ]; then
+                      echo "✅ Docker build completed successfully"
+                    else
+                      echo "##[error]Docker build failed!"
+                      exit 1
+                    fi
                   displayName: Build Docker Image
                   timeoutInMinutes: 30
 
+                # Deploy Container با bind صحیح روی all interfaces
                 - script: |
-                    docker stop $(imageRepository) 2>/dev/null || true
-                    docker rm $(imageRepository) 2>/dev/null || true
+                    echo "=== Stopping old container ==="
+                    docker stop $(imageRepository) 2>/dev/null || echo "No old container"
+                    docker rm $(imageRepository) 2>/dev/null || echo "No old container to remove"
                     
+                    echo "=== Starting new container with network binding ==="
                     docker run -d \
-                      -p $(dockerLocalPort):80 \
+                      -p 0.0.0.0:$(dockerLocalPort):80 \
                       --name $(imageRepository) \
                       --restart unless-stopped \
                       $(imageRepository):$(tag)
                     
+                    echo "=== Waiting for container ==="
                     sleep 5
-                    docker ps --filter "name=$(imageRepository)"
+                    
+                    if docker ps | grep $(imageRepository) >/dev/null 2>&1; then
+                      echo "✅ Container is running"
+                      docker ps --filter "name=$(imageRepository)"
+                    else
+                      echo "##[error]Container failed to start"
+                      docker logs $(imageRepository) 2>&1 || true
+                      exit 1
+                    fi
                   displayName: Deploy Container
 
+                # Network Testing
+                - script: |
+                    echo "=== Network Binding Check ==="
+                    sudo ss -tlnp | grep $(dockerLocalPort)
+                    
+                    echo ""
+                    echo "=== Testing localhost ==="
+                    curl -f -s -o /dev/null -w "Localhost: %{http_code}\n" http://localhost:$(dockerLocalPort)
+                    
+                    echo ""
+                    echo "=== Testing IP address ==="
+                    curl -f -s -o /dev/null -w "IP Access: %{http_code}\n" http://$(serverIP):$(dockerLocalPort) || echo "⚠️  IP access failed - check firewall"
+                    
+                    echo ""
+                    echo "=== Container Logs ==="
+                    docker logs $(imageRepository) --tail 20
+                  displayName: Network Tests
+                  continueOnError: true
+
+                # Firewall Check & Setup
+                - script: |
+                    echo "=== Checking Firewall ==="
+                    if command -v ufw >/dev/null 2>&1; then
+                      echo "UFW is installed"
+                      sudo ufw status | grep $(dockerLocalPort) || {
+                        echo "⚠️  Port $(dockerLocalPort) not open in firewall"
+                        echo "Run: sudo ufw allow $(dockerLocalPort)/tcp"
+                      }
+                    else
+                      echo "ℹ️  UFW not installed. Installing..."
+                      sudo apt update && sudo apt install ufw -y
+                      sudo ufw allow 22/tcp
+                      sudo ufw allow $(dockerLocalPort)/tcp
+                      sudo ufw --force enable
+                      echo "✅ UFW installed and configured"
+                    fi
+                  displayName: Configure Firewall
+                  continueOnError: true
+
+                # Deployment Summary
                 - script: |
                     echo "========================================"
                     echo "✅ DEPLOYMENT SUCCESSFUL!"
                     echo "========================================"
-                    echo "📱 Local: http://localhost:$(dockerLocalPort)"
+                    echo "📱 Localhost: http://localhost:$(dockerLocalPort)"
                     echo "🌐 Network: http://$(serverIP):$(dockerLocalPort)"
                     echo "🐳 Container: $(imageRepository)"
                     echo "🏷️  Tag: $(tag)"
+                    echo "📊 Build: $(Build.BuildId)"
                     echo "========================================"
                     echo ""
-                    echo "🔥 Access from any device in your network:"
-                    echo "   http://$(serverIP):$(dockerLocalPort)"
-                    echo ""
-                    echo "Container Status:"
+                    echo "Container Info:"
                     docker ps --filter "name=$(imageRepository)" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-                  displayName: Deployment Info
+                    echo ""
+                    echo "Network Binding:"
+                    sudo ss -tlnp | grep $(dockerLocalPort) | head -2
+                  displayName: Deployment Summary
