@@ -143,21 +143,33 @@ stages:
                   timeoutInMinutes: 1
                   continueOnError: true
 
-                # Deployment Summary
+                # Deployment Summary + WSL Port Forward Setup
                 - script: |
                     echo "========================================"
                     echo "✅ DEPLOYMENT SUCCESSFUL!"
                     echo "========================================"
-                    echo "📱 Localhost: http://localhost:$(dockerLocalPort)"
-                    echo "🌐 Network: http://$(serverIP):$(dockerLocalPort)"
+                    
+                    # Get WSL IP
+                    WSL_IP=$(hostname -I | awk '{print $1}')
+                    echo "WSL IP: $WSL_IP"
+                    echo "Windows Server IP: $(serverIP)"
+                    echo ""
+                    
                     echo "🐳 Container: $(imageRepository)"
                     echo "🏷️  Tag: $(tag)"
                     echo "📊 Build: $(Build.BuildId)"
                     echo "========================================"
                     echo ""
-                    echo "Container Info:"
-                    docker ps --filter "name=$(imageRepository)" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+                    echo "⚠️  WSL NETWORKING NOTICE:"
+                    echo "Since this is running in WSL, you need to setup port forwarding on Windows."
                     echo ""
-                    echo "Network Binding:"
-                    sudo ss -tlnp | grep $(dockerLocalPort) | head -2
+                    echo "Run this PowerShell command on Windows (as Administrator):"
+                    echo ""
+                    echo "netsh interface portproxy add v4tov4 listenport=$(dockerLocalPort) listenaddress=0.0.0.0 connectport=$(dockerLocalPort) connectaddress=$WSL_IP"
+                    echo ""
+                    echo "Then add Windows Firewall rule:"
+                    echo "New-NetFirewallRule -DisplayName 'Flutter Web App' -Direction Inbound -LocalPort $(dockerLocalPort) -Protocol TCP -Action Allow"
+                    echo ""
+                    echo "After that, access via: http://$(serverIP):$(dockerLocalPort)"
+                    echo "========================================"
                   displayName: Deployment Summary
