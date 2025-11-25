@@ -91,7 +91,7 @@ stages:
                       exit 1
                     fi
                   displayName: Build Docker Image
-                  timeoutInMinutes: 30
+                  timeoutInMinutes: 60
 
                 # Deploy Container با bind صحیح روی all interfaces
                 - script: |
