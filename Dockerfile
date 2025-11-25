@@ -1,5 +1,6 @@
 # Stage 1: Build Flutter Web App
-FROM ghcr.io/cirruslabs/flutter:latest AS build
+# تغییر ۱: استفاده از ایمیج داکر هاب به جای ghcr.io
+FROM mobiledevops/flutter-sdk-image:latest AS build
 
 WORKDIR /app
 
@@ -10,7 +11,8 @@ ENV FLUTTER_SUPPRESS_ROOT_WARNING=1
 
 # Fix git ownership
 USER root
-RUN git config --global --add safe.directory /sdks/flutter
+# تغییر ۲: استفاده از متغیر محیطی به جای آدرس ثابت /sdks/flutter
+RUN git config --global --add safe.directory $FLUTTER_ROOT
 
 # Show versions for debugging
 RUN echo "Flutter Version:" && flutter --version
